@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { Pill } from "@/components/ui/pill";
@@ -8,13 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import type { DocumentRecord, DocumentType } from "@/lib/types";
 
 const docTypes: { id: DocumentType; label: string }[] = [
+  { id: "management_status", label: "관리현황" },
   { id: "proposal", label: "제안서" },
   { id: "progress_report", label: "공정율" },
   { id: "fund_schedule", label: "자금집행" },
 ];
 
 export default function UploadPage() {
-  const [docType, setDocType] = useState<DocumentType>("progress_report");
+  const router = useRouter();
+  const [docType, setDocType] = useState<DocumentType>("management_status");
   const [uploading, setUploading] = useState(false);
   const [queue, setQueue] = useState<DocumentRecord[]>([]);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
@@ -34,6 +38,7 @@ export default function UploadPage() {
     setUploading(true);
     try {
       const messages: string[] = [];
+      let goManagement = false;
       for (const file of files) {
         const form = new FormData();
         form.append("file", file);
@@ -41,9 +46,13 @@ export default function UploadPage() {
         const res = await fetch("/api/upload", { method: "POST", body: form });
         const data = await res.json();
         if (data.message) messages.push(`${file.name}: ${data.message}`);
+        if (data.redirectTo === "/management" || docType === "management_status") {
+          goManagement = true;
+        }
       }
       setLastFeedback(messages.join("\n"));
       refresh();
+      if (goManagement) router.push("/management");
     } finally {
       setUploading(false);
     }
@@ -53,11 +62,19 @@ export default function UploadPage() {
     <AppShell title="문서 업로드">
       <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-2">
         <div className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold">부동산랩 현황 업로드</h2>
+            <p className="text-sm text-muted">
+              문서 유형을 <strong>관리현황</strong>으로 선택한 뒤 엑셀(`.xlsx`)을 올리면 사업장별(회차별)
+              조건·분배금/만기일로 정리됩니다.
+            </p>
+          </div>
+
           <UploadDropzone onUpload={handleUpload} uploading={uploading} />
 
           <div>
             <p className="mb-2 text-sm font-medium">문서 유형</p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {docTypes.map((t) => (
                 <Pill key={t.id} active={docType === t.id} onClick={() => setDocType(t.id)}>
                   {t.label}
@@ -67,8 +84,19 @@ export default function UploadPage() {
           </div>
 
           <p className="text-sm text-muted">
-            COST CM 기성실사 PDF 업로드 시 공정율·기성률을 자동 추출해 사업장 데이터에 반영합니다.
-            원본은 uploads/ 폴더에 저장됩니다.
+            관리현황 업로드 후{" "}
+            <Link href="/management" className="text-accent underline">
+              전체 현황
+            </Link>
+            ·
+            <Link href="/management/sites" className="text-accent underline">
+              사업장별(회차별)
+            </Link>
+            ·
+            <Link href="/management/interest" className="text-accent underline">
+              분배금/만기일
+            </Link>
+            에서 확인합니다. COST CM PDF는 공정율·기성률을 자동 추출합니다.
           </p>
           {lastFeedback && (
             <div className="rounded-lg border border-border bg-neutral-50 p-3 text-sm whitespace-pre-wrap">

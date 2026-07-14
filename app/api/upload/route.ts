@@ -5,6 +5,10 @@ import {
   resolveSiteId,
 } from "@/lib/analyzers/progress-report";
 import { parseProposalText } from "@/lib/analyzers/proposal";
+import {
+  isLabStatusExcelFile,
+  parseLabStatusExcel,
+} from "@/lib/analyzers/lab-status-excel";
 import { extractPdfText } from "@/lib/analyzers/pdf-extract";
 import {
   createDocument,
@@ -12,6 +16,7 @@ import {
   persistCostCmReport,
   persistProposal,
 } from "@/lib/data/repository";
+import { setLabPortfolio } from "@/lib/data/lab-portfolio";
 import { sites } from "@/lib/data/seed";
 import { uploadToGoogleDrive } from "@/lib/google-drive/client";
 import { saveUploadLocally } from "@/lib/storage/local";
@@ -39,6 +44,7 @@ export async function POST(req: NextRequest) {
   const applied: string[] = [];
   const warnings: string[] = [];
   let chunkCount = 0;
+  let docType: DocumentType = inferredType;
 
   try {
     await saveUploadLocally(file.name, buffer);
@@ -86,16 +92,28 @@ export async function POST(req: NextRequest) {
         siteName = siteId ? sites.find((s) => s.id === siteId)?.name ?? null : null;
         analysisStatus = siteId ? "done" : "needs_review";
       }
+    } else if (
+      inferredType === "management_status" ||
+      isLabStatusExcelFile(file.name)
+    ) {
+      const portfolio = parseLabStatusExcel(buffer, file.name);
+      setLabPortfolio(portfolio);
+      siteName = "부동산랩 포트폴리오";
+      docType = "management_status";
+      analysisStatus = "done";
+      applied.push(`랩 ${portfolio.stats.totalCount}건`);
+      applied.push(`운용 ${portfolio.stats.activeCount}건`);
+      applied.push(`상환 ${portfolio.stats.repaidCount}건`);
     } else {
       siteId = resolveSiteId(null, file.name);
       siteName = siteId ? sites.find((s) => s.id === siteId)?.name ?? null : null;
       analysisStatus = siteId ? "done" : "pending";
-      warnings.push("Excel 파서는 추후 지원");
+      warnings.push("Excel 파서는 추후 지원 (관리현황 엑셀은 문서 유형을 ‘관리현황’으로 선택하세요)");
     }
 
     const driveResult = await uploadToGoogleDrive(file.name, buffer, {
       siteName: siteName ?? undefined,
-      docType: inferredType,
+      docType: docType,
     });
     if (driveResult) {
       googleDriveUrl = driveResult.webViewLink;
@@ -111,7 +129,7 @@ export async function POST(req: NextRequest) {
     id: docId,
     siteId,
     siteName,
-    type: inferredType,
+    type: docType,
     fileName: file.name,
     analysisStatus,
     uploadedAt: new Date().toISOString(),
@@ -126,9 +144,12 @@ export async function POST(req: NextRequest) {
     applied,
     warnings,
     chunkCount,
+    redirectTo: docType === "management_status" ? "/management" : undefined,
     message:
       analysisStatus === "done"
-        ? `분석 완료: ${applied.join(", ") || "저장됨"}`
+        ? docType === "management_status"
+          ? `관리현황 반영: ${applied.join(", ")}`
+          : `분석 완료: ${applied.join(", ") || "저장됨"}`
         : analysisStatus === "needs_review"
           ? "분석 완료 — 검수 필요"
           : analysisStatus === "failed"

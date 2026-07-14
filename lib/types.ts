@@ -1,6 +1,11 @@
 export type SiteStatus = "planned" | "in_progress" | "completed" | "suspended";
 
-export type DocumentType = "proposal" | "progress_report" | "fund_schedule" | "other";
+export type DocumentType =
+  | "proposal"
+  | "progress_report"
+  | "fund_schedule"
+  | "management_status"
+  | "other";
 
 export type AnalysisStatus = "pending" | "processing" | "done" | "failed" | "needs_review";
 
@@ -74,4 +79,52 @@ export interface SiteDetail extends Site {
   progressReports: ProgressReport[];
   fundSchedules: FundSchedule[];
   documents: DocumentRecord[];
+}
+
+/** 부동산랩 관리현황 (엑셀) 1건 */
+export type LabFundStatus = "active" | "repaid" | "unknown";
+
+export interface LabInterestPayment {
+  round: number;
+  date: string;
+  raw?: string;
+}
+
+export interface LabFund {
+  id: string;
+  name: string;
+  productCode: string | null;
+  fundName: string | null;
+  fundCode: string | null;
+  purchaseAgency: string | null;
+  setupDate: string | null;
+  maturityDate: string | null;
+  loanMaturityDate: string | null;
+  repaymentDate: string | null;
+  setupAmount: number | null;
+  balance: number | null;
+  interestRate: number | null;
+  feeRate: number | null;
+  trustType: string | null;
+  siteAddress: string | null;
+  businessDesc: string | null;
+  plannedProgressPct: number | null;
+  actualProgressPct: number | null;
+  vsPlan: string | null;
+  note: string | null;
+  interestPayments: LabInterestPayment[];
+  status: LabFundStatus;
+}
+
+export interface LabPortfolioSnapshot {
+  uploadedAt: string;
+  fileName: string;
+  funds: LabFund[];
+  stats: {
+    totalCount: number;
+    activeCount: number;
+    repaidCount: number;
+    totalSetupAmount: number;
+    totalBalance: number;
+  };
 }

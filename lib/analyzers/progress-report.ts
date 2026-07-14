@@ -174,6 +174,13 @@ export function parseCostCmReport(rawText: string, fileName: string): ParsedCost
 
 export function inferDocumentType(fileName: string): DocumentType {
   const lower = fileName.toLowerCase();
+  if (
+    lower.includes("랩현황") ||
+    lower.includes("관리현황") ||
+    (lower.includes("현황") && (lower.endsWith(".xlsx") || lower.endsWith(".xls")))
+  ) {
+    return "management_status";
+  }
   if (lower.includes("기성") || lower.includes("공정")) return "progress_report";
   if (lower.includes("제안") || lower.includes("proposal") || lower.includes("im_sh")) return "proposal";
   if (lower.includes("자금") || lower.includes("집행")) return "fund_schedule";

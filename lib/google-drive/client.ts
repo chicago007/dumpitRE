@@ -83,6 +83,7 @@ function docTypeSubfolder(type: string): string {
     proposal: "01_제안서",
     progress_report: "02_공정율",
     fund_schedule: "03_자금집행",
+    management_status: "04_관리현황",
   };
   return map[type] ?? "99_기타";
 }
