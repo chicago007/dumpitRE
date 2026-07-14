@@ -79,7 +79,7 @@ create table document_chunks (
   site_id uuid references sites(id),
   chunk_index int not null,
   content text not null,
-  embedding vector(1536),
+  embedding vector(768),
   metadata jsonb default '{}',
   created_at timestamptz default now()
 );

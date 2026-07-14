@@ -11,7 +11,7 @@ create index if not exists idx_document_chunks_embedding
   with (lists = 100);
 
 create or replace function match_document_chunks(
-  query_embedding vector(1536),
+  query_embedding vector(768),
   match_threshold float default 0.5,
   match_count int default 8,
   filter_site_id uuid default null
