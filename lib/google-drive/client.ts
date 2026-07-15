@@ -8,8 +8,27 @@ export interface DriveUploadResult {
 }
 
 function getPrivateKey(): string {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ?? "";
-  return raw.replace(/\\n/g, "\n");
+  let raw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ?? "";
+  raw = raw.trim();
+  // JSON/dotenv 붙여넣기 잔여물: 따옴표·쉼표
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    raw = raw.slice(1, -1);
+  }
+  raw = raw.replace(/\\n/g, "\n").replace(/\r/g, "").trim();
+  if (raw.endsWith('",') || raw.endsWith("',")) raw = raw.slice(0, -2).trim();
+  if (raw.endsWith('"') || raw.endsWith("'")) raw = raw.slice(0, -1).trim();
+
+  const begin = "-----BEGIN PRIVATE KEY-----";
+  const end = "-----END PRIVATE KEY-----";
+  const start = raw.indexOf(begin);
+  const stop = raw.indexOf(end);
+  if (start >= 0 && stop > start) {
+    raw = raw.slice(start, stop + end.length).trim() + "\n";
+  }
+  return raw;
 }
 
 function getAuth() {
@@ -40,8 +59,13 @@ export function isGoogleDriveConfigured(): boolean {
 
 const folderCache = new Map<string, string>();
 
+function rootFolderId(): string | null {
+  const id = (process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ?? "").trim().replace(/[.\s]+$/, "");
+  return id || null;
+}
+
 export async function ensureSiteFolder(siteName: string): Promise<string | null> {
-  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  const rootId = rootFolderId();
   const drive = getDrive();
   if (!rootId || !drive) return null;
 
@@ -56,6 +80,7 @@ export async function ensureSiteFolder(siteName: string): Promise<string | null>
     fields: "files(id, name)",
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
+    corpora: "allDrives",
   });
 
   if (existing.data.files?.[0]?.id) {
@@ -94,19 +119,38 @@ export async function uploadToGoogleDrive(
   options?: { siteName?: string; docType?: string }
 ): Promise<DriveUploadResult | null> {
   const drive = getDrive();
-  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  const rootId = rootFolderId();
   if (!drive || !rootId) return null;
 
-  let parentId = rootId;
-  if (options?.siteName) {
-    const siteFolder = await ensureSiteFolder(options.siteName);
-    if (siteFolder) parentId = siteFolder;
+  // 루트 폴더 접근 가능 여부 선확인 (공유 누락/잘못된 ID를 바로 안내)
+  try {
+    await drive.files.get({
+      fileId: rootId,
+      fields: "id, name",
+      supportsAllDrives: true,
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "unknown";
+    throw new Error(
+      `루트 폴더(${rootId})에 접근할 수 없습니다. 서비스 계정에 편집자 공유·폴더 ID를 확인해 주세요. (${detail})`
+    );
   }
+
+  let parentId = rootId;
+  const folderLabel = (options?.siteName ?? "").trim() || "미분류";
+  const siteFolder = await ensureSiteFolder(folderLabel);
+  if (siteFolder) parentId = siteFolder;
 
   if (options?.docType) {
     const subName = docTypeSubfolder(options.docType);
     const subQuery = `'${parentId}' in parents and name = '${subName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-    const subExisting = await drive.files.list({ q: subQuery, fields: "files(id)" });
+    const subExisting = await drive.files.list({
+      q: subQuery,
+      fields: "files(id)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: "allDrives",
+    });
     if (subExisting.data.files?.[0]?.id) {
       parentId = subExisting.data.files[0].id!;
     } else {
@@ -117,6 +161,7 @@ export async function uploadToGoogleDrive(
           parents: [parentId],
         },
         fields: "id",
+        supportsAllDrives: true,
       });
       parentId = subCreated.data.id!;
     }

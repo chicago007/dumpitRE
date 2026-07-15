@@ -96,6 +96,7 @@ export interface LabFund {
   productCode: string | null;
   fundName: string | null;
   fundCode: string | null;
+  /** 매입기관 (SH/GH/LH 등) */
   purchaseAgency: string | null;
   setupDate: string | null;
   maturityDate: string | null;
@@ -105,13 +106,32 @@ export interface LabFund {
   balance: number | null;
   interestRate: number | null;
   feeRate: number | null;
+  /** 신탁방식 (예: 관리형 토지신탁) */
   trustType: string | null;
+  /** 신탁사 */
+  trustCompany: string | null;
   siteAddress: string | null;
   businessDesc: string | null;
+  /** 시행사 */
+  developer: string | null;
+  /** 시공사 */
+  contractor: string | null;
+  /** 대지면적 (평/㎡ 표기) */
+  landArea: string | null;
+  /** 건축면적 */
+  buildingArea: string | null;
+  /** 연면적 */
+  totalFloorArea: string | null;
+  /** 건축규모 */
+  buildingScale: string | null;
+  /** 세대수 */
+  householdCount: string | null;
   plannedProgressPct: number | null;
   actualProgressPct: number | null;
   vsPlan: string | null;
   note: string | null;
+  /** 관리자 입력 진행현황 코멘트 */
+  progressComment: string | null;
   interestPayments: LabInterestPayment[];
   status: LabFundStatus;
 }
@@ -127,4 +147,44 @@ export interface LabPortfolioSnapshot {
     totalSetupAmount: number;
     totalBalance: number;
   };
+}
+
+/** 관리자: 랩명/펀드명/사업장 주소 마스터 */
+export interface ProductMaster {
+  id: string;
+  labName: string;
+  fundName: string | null;
+  siteAddress: string;
+  siteName: string | null;
+  aliases: string[];
+  siteId: string | null;
+  contractAmount: number | null;
+  notes: string | null;
+  hasProposal?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 제안서 업로드 후 신규/기존 선택용 랩 옵션 */
+export interface ProposalLabOption {
+  id: string;
+  name: string;
+  fundName: string | null;
+  siteAddress: string | null;
+}
+
+/** 제안서 업로드 후 신규/기존 확인 UI로 넘기는 페이로드 */
+export interface ProposalRegistrationPrompt {
+  documentId: string;
+  fileName: string;
+  suggestedSiteName: string | null;
+  suggestedFundName: string | null;
+  suggestedLabName: string | null;
+  suggestedLocation: string | null;
+  suggestedBudget: number | null;
+  matchedProductId: string | null;
+  matchedLabFundId: string | null;
+  matchedLabel: string | null;
+  labOptions: ProposalLabOption[];
+  question: string;
 }

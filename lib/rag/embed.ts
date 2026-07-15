@@ -7,7 +7,11 @@ export function isEmbeddingConfigured(): boolean {
 }
 
 function embeddingModelName(): string {
-  const raw = process.env.GEMINI_EMBEDDING_MODEL ?? "gemini-embedding-001";
+  let raw = (process.env.GEMINI_EMBEDDING_MODEL ?? "gemini-embedding-001").trim();
+  // Google AI Studio/Vertex 혼동: text-embedding-004 는 embedContent 미지원
+  if (raw === "text-embedding-004" || raw.endsWith("/text-embedding-004")) {
+    raw = "gemini-embedding-001";
+  }
   return raw.startsWith("models/") ? raw : `models/${raw}`;
 }
 

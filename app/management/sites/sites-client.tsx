@@ -36,7 +36,6 @@ export default function ManagementSitesPage() {
     refresh();
   }, [refresh]);
 
-  /** 선택 가능한 랩 목록 (사업장 필터 시 해당 사업장만) */
   const selectableFunds = useMemo(() => {
     if (!portfolio) return [] as LabFund[];
     let list = portfolio.funds;
@@ -46,7 +45,6 @@ export default function ManagementSitesPage() {
     return sortLabFunds(list);
   }, [portfolio, siteFilter]);
 
-  // URL / 데이터 로드 후 선택 동기화
   useEffect(() => {
     if (selectableFunds.length === 0) {
       setSelectedId(null);
@@ -78,6 +76,16 @@ export default function ManagementSitesPage() {
     router.replace(`/management/sites?${params.toString()}`, { scroll: false });
   }
 
+  function handleFundUpdated(fund: LabFund) {
+    setPortfolio((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        funds: prev.funds.map((f) => (f.id === fund.id ? fund : f)),
+      };
+    });
+  }
+
   const siteLabel =
     siteFilter === "__none__"
       ? "사업장 미기재"
@@ -85,9 +93,14 @@ export default function ManagementSitesPage() {
         ? siteFilter
         : null;
 
+  function shortLabLabel(name: string) {
+    const m = name.match(/(\d+)\s*호/);
+    return m ? `${m[1]}호` : name;
+  }
+
   return (
     <AppShell title="사업장별(회차별) 현황">
-      <div className="mx-auto max-w-4xl space-y-5">
+      <div className="mx-auto max-w-7xl">
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
         ) : !portfolio ? (
@@ -95,74 +108,62 @@ export default function ManagementSitesPage() {
         ) : selectableFunds.length === 0 ? (
           <p className="text-sm text-muted">표시할 부동산랩이 없습니다.</p>
         ) : (
-          <>
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">사업장별(회차별) 현황</h2>
-              <p className="mt-1 text-sm text-muted">
-                부동산랩을 선택하면 회차별 이자지급을 확인합니다.
-                {siteLabel ? ` · 사업장: ${siteLabel}` : ""}
-              </p>
-            </div>
-
-            {/* 랩(회차/호) 선택 */}
-            <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-muted">부동산랩 선택</p>
-                <span className="text-xs text-muted">{selectableFunds.length}개</span>
+          <div className="flex h-[calc(100dvh-8.5rem)] min-h-[28rem] gap-4 overflow-hidden">
+            {/* 왼쪽: 부동산랩 목록 (보조 네비) */}
+            <aside
+              className="flex w-[4.5rem] shrink-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-neutral-100/80"
+            >
+              <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border/60 px-1.5 py-2.5">
+                <p className="text-[10px] font-medium tracking-wide text-neutral-400">
+                  랩
+                </p>
+                <span className="text-[10px] text-neutral-400">{selectableFunds.length}</span>
               </div>
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {siteLabel ? (
+                <p
+                  className="shrink-0 truncate border-b border-border/60 px-1.5 py-1.5 text-[10px] text-neutral-400"
+                  title={siteLabel}
+                >
+                  필터
+                </p>
+              ) : null}
+              <div className="min-h-0 flex-1 overflow-y-auto p-1">
                 {selectableFunds.map((fund) => {
                   const active = fund.id === selectedId;
+                  const label = shortLabLabel(fund.name);
                   return (
                     <button
                       key={fund.id}
                       type="button"
                       onClick={() => selectLab(fund.id)}
+                      title={fund.name}
                       className={cn(
-                        "shrink-0 rounded-lg border px-3 py-2 text-left transition-colors",
+                        "mb-0.5 block w-full rounded-md px-1 py-1.5 text-center text-sm tabular-nums whitespace-nowrap transition-colors",
                         active
-                          ? "border-accent bg-blue-50 text-accent shadow-sm"
-                          : "border-border bg-white text-foreground hover:bg-neutral-50"
+                          ? "bg-accent font-semibold text-white shadow-sm"
+                          : "font-normal text-neutral-400 hover:bg-white/70 hover:text-neutral-600"
                       )}
                     >
-                      <span className="block text-sm font-semibold whitespace-nowrap">
-                        {fund.name}
-                      </span>
-                      <span className="mt-0.5 block max-w-[160px] truncate text-[11px] text-muted">
-                        {fund.status === "active"
-                          ? "운용중"
-                          : fund.status === "repaid"
-                            ? "상환완료"
-                            : "미확인"}
-                        {" · "}
-                        {fund.interestPayments.length}회차
-                      </span>
+                      {label}
                     </button>
                   );
                 })}
               </div>
-              <div className="mt-3 border-t border-border pt-3">
-                <label className="sr-only" htmlFor="lab-select">
-                  부동산랩 선택
-                </label>
-                <select
-                  id="lab-select"
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-                  value={selectedId ?? ""}
-                  onChange={(e) => selectLab(e.target.value)}
-                >
-                  {selectableFunds.map((fund) => (
-                    <option key={fund.id} value={fund.id}>
-                      {fund.name}
-                      {fund.siteAddress ? ` — ${fund.siteAddress}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            </aside>
 
-            {selectedFund && <LabRoundCard fund={selectedFund} />}
-          </>
+            {/* 오른쪽: 사업장 현황 (주 영역) */}
+            <section className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card shadow-sm">
+              {selectedFund ? (
+                <LabRoundCard
+                  fund={selectedFund}
+                  embedded
+                  onFundUpdated={handleFundUpdated}
+                />
+              ) : (
+                <p className="p-4 text-sm text-muted">왼쪽에서 부동산랩을 선택하세요.</p>
+              )}
+            </section>
+          </div>
         )}
       </div>
     </AppShell>
@@ -174,7 +175,7 @@ function EmptyUpload() {
     <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center shadow-sm">
       <p className="text-sm text-muted">아직 업로드된 관리현황이 없습니다.</p>
       <Link href="/upload" className="mt-3 inline-block text-sm text-accent hover:underline">
-        업로드에서 관리현황 엑셀 올리기
+        관리자 업로드에서 관리현황 엑셀 올리기
       </Link>
     </div>
   );

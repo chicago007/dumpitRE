@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { Sidebar } from "@/components/layout/sidebar";
-import { Button } from "@/components/ui/button";
 
 interface AppShellProps {
   title: string;
@@ -10,20 +8,14 @@ interface AppShellProps {
 
 export function AppShell({ title, children, action }: AppShellProps) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center gap-4 border-b border-border bg-card px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="z-20 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-card px-6">
           <h1 className="text-base font-semibold">{title}</h1>
-          <div className="ml-auto flex items-center gap-2">
-            {action ?? (
-              <Link href="/upload">
-                <Button>문서 업로드</Button>
-              </Link>
-            )}
-          </div>
+          {action ? <div className="ml-auto flex items-center gap-2">{action}</div> : null}
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );

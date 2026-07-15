@@ -9,8 +9,9 @@ export function labOrderNumber(name: string): number {
 export function compareLabFunds(a: LabFund, b: LabFund): number {
   const na = labOrderNumber(a.name);
   const nb = labOrderNumber(b.name);
-  if (na !== nb) return na - nb;
-  return a.name.localeCompare(b.name, "ko");
+  // 호수 내림차순 (61호 → 1호)
+  if (na !== nb) return nb - na;
+  return b.name.localeCompare(a.name, "ko");
 }
 
 export function sortLabFunds(funds: LabFund[]): LabFund[] {
@@ -96,5 +97,5 @@ export function formatRate(rate: number | null): string {
 }
 
 export function progressLabel(value: number | null): string {
-  return value == null ? "자료 대기" : `${Math.round(value)}%`;
+  return value == null ? "—" : `${Math.round(value)}%`;
 }

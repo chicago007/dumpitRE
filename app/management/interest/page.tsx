@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { sortLabFunds } from "@/lib/lab/portfolio-ui";
+import { cn } from "@/lib/utils";
 import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
+
+type ViewMode = "list" | "calendar";
 
 type DateItem = {
   key: string;
@@ -12,7 +16,16 @@ type DateItem = {
   siteAddress: string | null;
   date: string;
   label: string;
+  kind: "distribution" | "maturity";
   raw?: string;
+};
+
+type CalendarEvent = {
+  key: string;
+  date: string;
+  fundName: string;
+  label: string;
+  kind: "distribution" | "maturity";
 };
 
 function todayStart() {
@@ -30,7 +43,6 @@ function isOnOrAfterToday(date: string): boolean {
   return new Date(date) >= todayStart();
 }
 
-/** 분배금(=회차) 지급일 — 오늘 이후만, 빠른 날짜순 */
 function buildDistributionDates(funds: LabFund[]): DateItem[] {
   const items: DateItem[] = [];
   for (const fund of funds) {
@@ -42,6 +54,7 @@ function buildDistributionDates(funds: LabFund[]): DateItem[] {
         siteAddress: fund.siteAddress,
         date: p.date,
         label: `${p.round}회차`,
+        kind: "distribution",
         raw: p.raw,
       });
     }
@@ -50,7 +63,6 @@ function buildDistributionDates(funds: LabFund[]): DateItem[] {
   return items;
 }
 
-/** 만기일 — 만기·대출만기 중 오늘 이후, 빠른 날짜순 */
 function buildMaturityDates(funds: LabFund[]): DateItem[] {
   const items: DateItem[] = [];
   for (const fund of funds) {
@@ -61,6 +73,7 @@ function buildMaturityDates(funds: LabFund[]): DateItem[] {
         siteAddress: fund.siteAddress,
         date: fund.maturityDate,
         label: "만기",
+        kind: "maturity",
       });
     }
     if (
@@ -74,6 +87,7 @@ function buildMaturityDates(funds: LabFund[]): DateItem[] {
         siteAddress: fund.siteAddress,
         date: fund.loanMaturityDate,
         label: "대출 만기일",
+        kind: "maturity",
       });
     }
   }
@@ -81,9 +95,28 @@ function buildMaturityDates(funds: LabFund[]): DateItem[] {
   return items;
 }
 
+function buildMonthCells(year: number, month: number) {
+  const first = new Date(year, month, 1);
+  const startPad = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: ({ day: number; iso: string } | null)[] = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({
+      day,
+      iso: `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    });
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
 export default function InterestPage() {
   const [portfolio, setPortfolio] = useState<LabPortfolioSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const now = todayStart();
+  const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -111,8 +144,76 @@ export default function InterestPage() {
   }, [funds]);
   const rounds = Array.from({ length: maxRound }, (_, i) => i + 1);
 
+  const calendarEvents = useMemo(() => {
+    const events: CalendarEvent[] = [
+      ...distributions.map((d) => ({
+        key: d.key,
+        date: d.date,
+        fundName: d.fundName,
+        label: d.label,
+        kind: d.kind,
+      })),
+      ...maturities.map((m) => ({
+        key: m.key,
+        date: m.date,
+        fundName: m.fundName,
+        label: m.label,
+        kind: m.kind,
+      })),
+    ];
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    return events;
+  }, [distributions, maturities]);
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of calendarEvents) {
+      const list = map.get(e.date) ?? [];
+      list.push(e);
+      map.set(e.date, list);
+    }
+    return map;
+  }, [calendarEvents]);
+
+  const monthCells = useMemo(
+    () => buildMonthCells(cursor.year, cursor.month),
+    [cursor.year, cursor.month]
+  );
+
+  const viewTabs = (
+    <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+      {(
+        [
+          ["list", "빠른 날짜순"],
+          ["calendar", "달력"],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setViewMode(id)}
+          className={cn(
+            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            viewMode === id
+              ? "bg-white text-foreground shadow-sm"
+              : "text-muted hover:text-foreground"
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  function shiftMonth(delta: number) {
+    setCursor((prev) => {
+      const d = new Date(prev.year, prev.month + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+  }
+
   return (
-    <AppShell title="분배금/만기일 확인">
+    <AppShell title="분배금/만기일 확인" action={portfolio ? viewTabs : undefined}>
       <div className="mx-auto max-w-7xl space-y-6">
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
@@ -125,60 +226,67 @@ export default function InterestPage() {
           </div>
         ) : (
           <>
-            <section className="space-y-1">
-              <h2 className="text-xl font-semibold tracking-tight">분배금/만기일 확인</h2>
-              <p className="text-sm text-muted">
-                위: 오늘 이후 일정(빠른 날짜순) · 아래: 설정일부터 회차·만기 전체 스케줄
-              </p>
-            </section>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <DateList
-                title="분배금 지급일"
-                items={distributions}
-                empty="예정된 분배금 지급일이 없습니다."
+            {viewMode === "list" ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <DateList
+                  title="분배금 지급일"
+                  items={distributions}
+                  empty="예정된 분배금 지급일이 없습니다."
+                />
+                <DateList
+                  title="만기일"
+                  items={maturities}
+                  empty="예정된 만기일이 없습니다."
+                />
+              </div>
+            ) : (
+              <CalendarBoard
+                year={cursor.year}
+                month={cursor.month}
+                cells={monthCells}
+                eventsByDate={eventsByDate}
+                todayIso={`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`}
+                onPrev={() => shiftMonth(-1)}
+                onNext={() => shiftMonth(1)}
+                onToday={() =>
+                  setCursor({ year: now.getFullYear(), month: now.getMonth() })
+                }
               />
-              <DateList
-                title="만기일"
-                items={maturities}
-                empty="예정된 만기일이 없습니다."
-              />
-            </div>
+            )}
 
             <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
               <div className="border-b border-border px-4 py-3">
-                <h3 className="text-sm font-semibold">회차별 전체 스케줄</h3>
                 <p className="text-xs text-muted">
-                  설정일 → 분배금 회차 → 만기·대출만기·상환일 (전체 일정)
+                  회차별 스케줄 (설정일 → 대출만기일 → 만기일 → 상환일 → 1차…)
                 </p>
               </div>
-              <div className="max-h-[min(60vh,640px)] overflow-auto">
-                <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+              <div className="max-h-[min(60vh,640px)] overflow-x-auto overflow-y-auto">
+                <table className="w-max border-separate border-spacing-0 text-left text-sm">
                   <thead className="text-xs text-muted">
                     <tr>
-                      <th className="sticky top-0 left-0 z-30 bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 left-0 z-30 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         부동산랩
                       </th>
-                      <th className="sticky top-0 z-20 bg-neutral-50 px-3 py-3 font-medium whitespace-nowrap shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         설정일
+                      </th>
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                        대출만기일
+                      </th>
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                        만기일
+                      </th>
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                        상환일
                       </th>
                       {rounds.map((r) => (
                         <th
                           key={r}
-                          className="sticky top-0 z-20 bg-neutral-50 px-3 py-3 font-medium whitespace-nowrap shadow-[inset_0_-1px_0_0_var(--color-border)]"
+                          className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]"
                         >
-                          {r}회차
+                          {r}차
                         </th>
                       ))}
-                      <th className="sticky top-0 z-20 bg-neutral-50 px-3 py-3 font-medium whitespace-nowrap shadow-[inset_0_-1px_0_0_var(--color-border)]">
-                        만기
-                      </th>
-                      <th className="sticky top-0 z-20 bg-neutral-50 px-3 py-3 font-medium whitespace-nowrap shadow-[inset_0_-1px_0_0_var(--color-border)]">
-                        대출 만기일
-                      </th>
-                      <th className="sticky top-0 z-20 bg-neutral-50 px-3 py-3 font-medium whitespace-nowrap shadow-[inset_0_-1px_0_0_var(--color-border)]">
-                        상환일
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -186,13 +294,13 @@ export default function InterestPage() {
                       const byRound = new Map(f.interestPayments.map((p) => [p.round, p]));
                       return (
                         <tr key={f.id} className="hover:bg-neutral-50/80">
-                          <td className="sticky left-0 z-10 border-t border-border bg-card px-4 py-2.5">
-                            <p className="font-medium whitespace-nowrap">{f.name}</p>
-                            <p className="max-w-[160px] truncate text-xs text-muted">
-                              {f.siteAddress ?? "—"}
-                            </p>
+                          <td className="sticky left-0 z-10 whitespace-nowrap border-t border-border bg-card px-4 py-2.5 font-medium">
+                            {f.name}
                           </td>
                           <ScheduleCell date={f.setupDate} />
+                          <ScheduleCell date={f.loanMaturityDate} />
+                          <ScheduleCell date={f.maturityDate} />
+                          <ScheduleCell date={f.repaymentDate} />
                           {rounds.map((r) => {
                             const p = byRound.get(r);
                             return (
@@ -203,9 +311,6 @@ export default function InterestPage() {
                               />
                             );
                           })}
-                          <ScheduleCell date={f.maturityDate} />
-                          <ScheduleCell date={f.loanMaturityDate} />
-                          <ScheduleCell date={f.repaymentDate} />
                         </tr>
                       );
                     })}
@@ -217,6 +322,125 @@ export default function InterestPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function CalendarBoard({
+  year,
+  month,
+  cells,
+  eventsByDate,
+  todayIso,
+  onPrev,
+  onNext,
+  onToday,
+}: {
+  year: number;
+  month: number;
+  cells: ({ day: number; iso: string } | null)[];
+  eventsByDate: Map<string, CalendarEvent[]>;
+  todayIso: string;
+  onPrev: () => void;
+  onNext: () => void;
+  onToday: () => void;
+}) {
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const title = `${year}년 ${month + 1}월`;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onPrev}
+            className="rounded-md border border-border p-1.5 text-muted hover:bg-neutral-50 hover:text-foreground"
+            aria-label="이전 달"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <h3 className="min-w-[7rem] text-center text-sm font-semibold">{title}</h3>
+          <button
+            type="button"
+            onClick={onNext}
+            className="rounded-md border border-border p-1.5 text-muted hover:bg-neutral-50 hover:text-foreground"
+            aria-label="다음 달"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onToday}
+            className="ml-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-neutral-50 hover:text-foreground"
+          >
+            오늘
+          </button>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-accent" /> 분배금
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-success" /> 만기
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 border-b border-border bg-neutral-50 text-center text-[11px] font-medium text-muted">
+        {weekdays.map((d) => (
+          <div key={d} className="px-2 py-2">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 auto-rows-[minmax(6.5rem,auto)]">
+        {cells.map((cell, idx) => {
+          if (!cell) {
+            return <div key={`empty-${idx}`} className="border-t border-r border-border bg-neutral-50/40" />;
+          }
+          const events = eventsByDate.get(cell.iso) ?? [];
+          const isToday = cell.iso === todayIso;
+          return (
+            <div
+              key={cell.iso}
+              className={cn(
+                "min-h-[6.5rem] border-t border-r border-border p-1.5",
+                isToday && "bg-blue-50/40"
+              )}
+            >
+              <p
+                className={cn(
+                  "mb-1 text-[11px] tabular-nums",
+                  isToday ? "font-semibold text-accent" : "text-muted"
+                )}
+              >
+                {cell.day}
+              </p>
+              <div className="space-y-0.5">
+                {events.slice(0, 3).map((e) => (
+                  <div
+                    key={e.key}
+                    className={cn(
+                      "truncate rounded px-1 py-0.5 text-[10px] leading-tight",
+                      e.kind === "distribution"
+                        ? "bg-blue-50 text-accent"
+                        : "bg-green-50 text-success"
+                    )}
+                    title={`${e.fundName} · ${e.label}`}
+                  >
+                    {e.fundName} {e.label}
+                  </div>
+                ))}
+                {events.length > 3 ? (
+                  <p className="px-1 text-[10px] text-muted">+{events.length - 3}</p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

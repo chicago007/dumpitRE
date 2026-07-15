@@ -4,26 +4,47 @@ import { sortLabFunds } from "@/lib/lab/portfolio-ui";
 
 const HEADER_ALIASES: Record<string, string> = {
   랩서비스명: "name",
+  랩명: "name",
   상품코드: "productCode",
   편입펀드: "fundName",
+  펀드명: "fundName",
   펀드코드: "fundCode",
   매입약정기관: "purchaseAgency",
+  매입기관: "purchaseAgency",
   설정일: "setupDate",
+  펀드설정일: "setupDate",
   만기: "maturityDate",
+  만기일: "maturityDate",
+  펀드만기일: "maturityDate",
   "대출 만기일": "loanMaturityDate",
   대출만기일: "loanMaturityDate",
   상환일: "repaymentDate",
   설정액: "setupAmount",
   잔액: "balance",
   금리: "interestRate",
+  목표수익률: "interestRate",
   수수료율: "feeRate",
   신탁유형: "trustType",
+  신탁방식: "trustType",
+  신탁사: "trustCompany",
   사업장: "siteAddress",
+  사업장주소: "siteAddress",
+  "사업장 주소": "siteAddress",
   사업내용: "businessDesc",
+  시행사: "developer",
+  시공사: "contractor",
+  대지면적: "landArea",
+  건축면적: "buildingArea",
+  연면적: "totalFloorArea",
+  건축규모: "buildingScale",
+  세대수: "householdCount",
   계획공정율: "plannedProgressPct",
   실행공정율: "actualProgressPct",
   계획대비: "vsPlan",
   비고: "note",
+  진행현황: "progressComment",
+  진행현황코멘트: "progressComment",
+  상태: "status",
 };
 
 function normalizeHeader(value: unknown): string {
@@ -181,6 +202,11 @@ export function parseLabStatusExcel(
       interestPayments.push({ round, date: parsed.date, raw: parsed.raw });
     }
 
+    const statusRaw = cellToString(get("status"));
+    let status = resolveStatus({ balance, repaymentDate });
+    if (statusRaw === "상환" || statusRaw === "repaid") status = "repaid";
+    else if (statusRaw === "진행중" || statusRaw === "active") status = "active";
+
     const fund: LabFund = {
       id: `lab-${String(get("productCode") ?? name).replace(/\s+/g, "")}`,
       name,
@@ -197,14 +223,23 @@ export function parseLabStatusExcel(
       interestRate: cellToNumber(get("interestRate")),
       feeRate: cellToNumber(get("feeRate")),
       trustType: cellToString(get("trustType")),
+      trustCompany: cellToString(get("trustCompany")),
       siteAddress: cellToString(get("siteAddress")),
       businessDesc: cellToString(get("businessDesc")),
+      developer: cellToString(get("developer")),
+      contractor: cellToString(get("contractor")),
+      landArea: cellToString(get("landArea")),
+      buildingArea: cellToString(get("buildingArea")),
+      totalFloorArea: cellToString(get("totalFloorArea")),
+      buildingScale: cellToString(get("buildingScale")),
+      householdCount: cellToString(get("householdCount")),
       plannedProgressPct: cellToNumber(get("plannedProgressPct")),
       actualProgressPct: cellToNumber(get("actualProgressPct")),
       vsPlan: cellToString(get("vsPlan")),
       note: cellToString(get("note")),
+      progressComment: cellToString(get("progressComment")),
       interestPayments,
-      status: resolveStatus({ balance, repaymentDate }),
+      status,
     };
 
     funds.push(fund);
@@ -234,4 +269,94 @@ export function isLabStatusExcelFile(fileName: string): boolean {
     (n.endsWith(".xlsx") || n.endsWith(".xls")) &&
     (n.includes("랩현황") || n.includes("관리현황") || n.includes("lab") || n.includes("현황"))
   );
+}
+
+/** 마스터(전체현황) → 관리현황 엑셀 다운로드용 */
+export function buildLabStatusExcelBuffer(funds: LabFund[]): Buffer {
+  const maxRound = Math.max(
+    0,
+    ...funds.flatMap((f) => (f.interestPayments ?? []).map((p) => p.round))
+  );
+  const rounds = Array.from({ length: Math.max(maxRound, 6) }, (_, i) => i + 1);
+
+  const headers = [
+    "랩서비스명",
+    "상태",
+    "상품코드",
+    "편입펀드",
+    "펀드코드",
+    "매입기관",
+    "설정일",
+    "펀드만기일",
+    "대출만기일",
+    "상환일",
+    "설정액",
+    "잔액",
+    "금리",
+    "수수료율",
+    "신탁방식",
+    "신탁사",
+    "사업장",
+    "사업내용",
+    "시행사",
+    "시공사",
+    "대지면적",
+    "건축면적",
+    "연면적",
+    "건축규모",
+    "세대수",
+    "계획공정율",
+    "실행공정율",
+    "계획대비",
+    "비고",
+    "진행현황코멘트",
+    ...rounds.map((r) => `${r}회차 지급일`),
+  ];
+
+  const statusLabel = (s: LabFundStatus) =>
+    s === "repaid" ? "상환" : s === "active" ? "진행중" : "기타";
+
+  const aoa: (string | number | null)[][] = [headers];
+  for (const f of sortLabFunds(funds)) {
+    const pay = new Map((f.interestPayments ?? []).map((p) => [p.round, p.raw ?? p.date]));
+    aoa.push([
+      f.name,
+      statusLabel(f.status),
+      f.productCode,
+      f.fundName,
+      f.fundCode,
+      f.purchaseAgency,
+      f.setupDate,
+      f.maturityDate,
+      f.loanMaturityDate,
+      f.repaymentDate,
+      f.setupAmount,
+      f.balance,
+      f.interestRate,
+      f.feeRate,
+      f.trustType,
+      f.trustCompany,
+      f.siteAddress,
+      f.businessDesc,
+      f.developer,
+      f.contractor,
+      f.landArea,
+      f.buildingArea,
+      f.totalFloorArea,
+      f.buildingScale,
+      f.householdCount,
+      f.plannedProgressPct,
+      f.actualProgressPct,
+      f.vsPlan,
+      f.note,
+      f.progressComment,
+      ...rounds.map((r) => pay.get(r) ?? null),
+    ]);
+  }
+
+  const sheet = XLSX.utils.aoa_to_sheet(aoa);
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "관리현황");
+  const out = XLSX.write(book, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return Buffer.from(out);
 }

@@ -52,7 +52,7 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col rounded-lg border border-border bg-card">
+    <div className="flex h-[calc(100dvh-8.5rem)] flex-col rounded-lg border border-border bg-card">
       <div className="flex gap-2 border-b border-border px-4 py-3">
         <Pill active>전체</Pill>
         <Pill>사업장별</Pill>

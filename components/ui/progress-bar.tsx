@@ -19,7 +19,7 @@ export function ProgressBar({
   value,
   label,
   tone = "blue",
-  emptyLabel = "자료 대기",
+  emptyLabel = "—",
   size = "sm",
 }: ProgressBarProps) {
   const height = size === "md" ? "h-2.5" : "h-1.5";

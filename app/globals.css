@@ -15,6 +15,12 @@
   --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);

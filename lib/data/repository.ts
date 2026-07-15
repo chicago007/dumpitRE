@@ -34,7 +34,8 @@ export { createChatSession };
 
 export async function listSites(filter?: { status?: string }): Promise<Site[]> {
   if (isSupabaseServerConfigured()) return sbRepo.sbListSites(filter);
-  let items = seed.sites;
+  const { isSiteDeleted } = await import("@/lib/data/deleted-masters");
+  let items = seed.sites.filter((s) => !isSiteDeleted(s.id));
   if (filter?.status && filter.status !== "all") {
     items = items.filter((s) => s.status === filter.status);
   }
@@ -62,23 +63,40 @@ export async function fetchSiteDetail(id: string): Promise<SiteDetail | null> {
 }
 
 export async function fetchDocuments(): Promise<DocumentRecord[]> {
-  if (isSupabaseServerConfigured()) return sbRepo.sbFetchDocuments();
+  if (isSupabaseServerConfigured()) {
+    try {
+      return await sbRepo.sbFetchDocuments();
+    } catch (err) {
+      console.warn("[documents] Supabase fetch failed, using local queue:", err);
+      return getDocuments();
+    }
+  }
   return getDocuments();
+}
+
+/** Supabase documents.type CHECK에 없는 값은 other로 매핑 */
+function toSupabaseDocType(type: DocumentRecord["type"]): string {
+  if (type === "management_status") return "other";
+  return type;
 }
 
 export async function createDocument(
   doc: DocumentRecord & { googleDriveFileId?: string | null }
 ): Promise<void> {
   if (isSupabaseServerConfigured()) {
-    await sbRepo.sbCreateDocument({
-      id: doc.id,
-      siteId: doc.siteId,
-      type: doc.type,
-      fileName: doc.fileName,
-      analysisStatus: doc.analysisStatus,
-      googleDriveUrl: doc.googleDriveUrl,
-      googleDriveFileId: doc.googleDriveFileId,
-    });
+    try {
+      await sbRepo.sbCreateDocument({
+        id: doc.id,
+        siteId: doc.siteId,
+        type: toSupabaseDocType(doc.type),
+        fileName: doc.fileName,
+        analysisStatus: doc.analysisStatus,
+        googleDriveUrl: doc.googleDriveUrl,
+        googleDriveFileId: doc.googleDriveFileId,
+      });
+    } catch (err) {
+      console.warn("[documents] Supabase insert failed, keeping local only:", err);
+    }
   }
   addDocument(doc);
 }

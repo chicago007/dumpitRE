@@ -7,10 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(amount: number): string {
   if (amount >= 100_000_000) {
-    return `${(amount / 100_000_000).toFixed(0)}억`;
+    const eok = Number((amount / 100_000_000).toFixed(0));
+    return `${eok.toLocaleString("ko-KR")}억`;
   }
   if (amount >= 10_000) {
-    return `${Math.round(amount / 10_000).toLocaleString()}만`;
+    return `${Math.round(amount / 10_000).toLocaleString("ko-KR")}만`;
   }
   return amount.toLocaleString("ko-KR");
 }
