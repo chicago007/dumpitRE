@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import type { LabFund, LabFundStatus, LabInterestPayment, LabPortfolioSnapshot } from "@/lib/types";
-import { sortLabFunds } from "@/lib/lab/portfolio-ui";
+import { sortLabFunds, normalizeRateValue, rateFromNumber, rateToNumber } from "@/lib/lab/portfolio-ui";
 
 const HEADER_ALIASES: Record<string, string> = {
   랩서비스명: "name",
@@ -83,6 +83,12 @@ function cellToNumber(value: unknown): number | null {
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+function cellToRate(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "string") return normalizeRateValue(value);
+  return rateFromNumber(cellToNumber(value));
 }
 
 function parseInterestDate(value: unknown): { date: string; raw?: string } | null {
@@ -220,8 +226,8 @@ export function parseLabStatusExcel(
       repaymentDate,
       setupAmount,
       balance,
-      interestRate: cellToNumber(get("interestRate")),
-      feeRate: cellToNumber(get("feeRate")),
+      interestRate: cellToRate(get("interestRate")),
+      feeRate: cellToRate(get("feeRate")),
       trustType: cellToString(get("trustType")),
       trustCompany: cellToString(get("trustCompany")),
       siteAddress: cellToString(get("siteAddress")),
@@ -332,8 +338,8 @@ export function buildLabStatusExcelBuffer(funds: LabFund[]): Buffer {
       f.repaymentDate,
       f.setupAmount,
       f.balance,
-      f.interestRate,
-      f.feeRate,
+      rateToNumber(f.interestRate),
+      rateToNumber(f.feeRate),
       f.trustType,
       f.trustCompany,
       f.siteAddress,

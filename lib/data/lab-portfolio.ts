@@ -5,6 +5,7 @@ import {
   rememberDeletedMaster,
   restoreDeletedMaster,
 } from "@/lib/data/deleted-masters";
+import { normalizeRateValue } from "@/lib/lab/portfolio-ui";
 import type { LabFund, LabInterestPayment, LabPortfolioSnapshot } from "@/lib/types";
 
 const PERSIST_PATH = path.join(process.cwd(), ".data", "lab-portfolio.json");
@@ -166,6 +167,8 @@ function trySeedFromSample() {
 function normalizeFund(f: LabFund): LabFund {
   return {
     ...f,
+    interestRate: normalizeRateValue(f.interestRate),
+    feeRate: normalizeRateValue(f.feeRate),
     trustCompany: f.trustCompany ?? null,
     landArea: f.landArea ?? null,
     buildingArea: f.buildingArea ?? null,
@@ -190,8 +193,8 @@ export function upsertLabFundFromProposal(input: {
   setupDate?: string | null;
   maturityDate?: string | null;
   loanMaturityDate?: string | null;
-  interestRate?: number | null;
-  feeRate?: number | null;
+  interestRate?: string | number | null;
+  feeRate?: string | number | null;
   purchaseAgency?: string | null;
   developer?: string | null;
   contractor?: string | null;
@@ -233,8 +236,14 @@ export function upsertLabFundFromProposal(input: {
       setupDate: input.setupDate ?? funds[idx].setupDate,
       maturityDate: input.maturityDate ?? funds[idx].maturityDate,
       loanMaturityDate: input.loanMaturityDate ?? funds[idx].loanMaturityDate,
-      interestRate: input.interestRate ?? funds[idx].interestRate,
-      feeRate: input.feeRate ?? funds[idx].feeRate,
+      interestRate:
+        input.interestRate != null
+          ? normalizeRateValue(input.interestRate)
+          : funds[idx].interestRate,
+      feeRate:
+        input.feeRate != null
+          ? normalizeRateValue(input.feeRate)
+          : funds[idx].feeRate,
       purchaseAgency: input.purchaseAgency ?? funds[idx].purchaseAgency,
       developer: input.developer ?? funds[idx].developer,
       contractor: input.contractor ?? funds[idx].contractor,
@@ -261,8 +270,8 @@ export function upsertLabFundFromProposal(input: {
         repaymentDate: null,
         setupAmount: input.setupAmount ?? null,
         balance: input.setupAmount ?? null,
-        interestRate: input.interestRate ?? null,
-        feeRate: input.feeRate ?? null,
+        interestRate: normalizeRateValue(input.interestRate),
+        feeRate: normalizeRateValue(input.feeRate),
         trustType: input.trustType ?? null,
         trustCompany: input.trustCompany ?? null,
         siteAddress: input.siteAddress ?? null,

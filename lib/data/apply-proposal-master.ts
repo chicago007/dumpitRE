@@ -1,3 +1,4 @@
+import { rateFromNumber } from "@/lib/lab/portfolio-ui";
 import { extractLabNumber, compactSiteAddress, type ParsedProposal } from "@/lib/analyzers/proposal";
 import { masterAddressIsTrustworthy } from "@/lib/analyzers/proposal-sanitize";
 import { ensureSiteForProduct } from "@/lib/data/create-site";
@@ -131,8 +132,9 @@ export function applyProposalMasterData(
     setupDate: parsed.setupDate,
     maturityDate: parsed.maturityDate,
     loanMaturityDate: parsed.loanMaturityDate,
-    interestRate: parsed.interestRate,
-    feeRate: parsed.feeRate,
+    interestRate:
+      parsed.interestRate != null ? rateFromNumber(parsed.interestRate) : undefined,
+    feeRate: parsed.feeRate != null ? rateFromNumber(parsed.feeRate) : undefined,
     purchaseAgency: parsed.purchaseAgency,
     developer: parsed.developer,
     contractor: parsed.contractor,

@@ -25,7 +25,7 @@ export default function ManagementSitesPage() {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetch("/api/lab-portfolio")
+    fetch("/api/lab-portfolio", { cache: "no-store" })
       .then((r) => r.json())
       .then((data: LabPortfolioSnapshot) => setPortfolio(data))
       .catch(console.error)
@@ -111,7 +111,7 @@ export default function ManagementSitesPage() {
           <div className="flex h-[calc(100dvh-8.5rem)] min-h-[28rem] gap-4 overflow-hidden">
             {/* 왼쪽: 부동산랩 목록 (보조 네비) */}
             <aside
-              className="flex w-[4.5rem] shrink-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-neutral-100/80"
+              className="flex w-[4.5rem] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-100/90"
             >
               <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border/60 px-1.5 py-2.5">
                 <p className="text-[10px] font-medium tracking-wide text-neutral-400">
@@ -140,8 +140,8 @@ export default function ManagementSitesPage() {
                       className={cn(
                         "mb-0.5 block w-full rounded-md px-1 py-1.5 text-center text-sm tabular-nums whitespace-nowrap transition-colors",
                         active
-                          ? "bg-accent font-semibold text-white shadow-sm"
-                          : "font-normal text-neutral-400 hover:bg-white/70 hover:text-neutral-600"
+                          ? "bg-accent font-semibold text-accent-foreground shadow-sm"
+                          : "font-normal text-slate-400 hover:bg-white hover:text-slate-600"
                       )}
                     >
                       {label}
@@ -152,7 +152,7 @@ export default function ManagementSitesPage() {
             </aside>
 
             {/* 오른쪽: 사업장 현황 (주 영역) */}
-            <section className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card shadow-sm">
+            <section className="shadow-card min-h-0 min-w-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card">
               {selectedFund ? (
                 <LabRoundCard
                   fund={selectedFund}
@@ -172,7 +172,7 @@ export default function ManagementSitesPage() {
 
 function EmptyUpload() {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center shadow-sm">
+    <div className="shadow-card rounded-xl border border-dashed border-border bg-card p-10 text-center">
       <p className="text-sm text-muted">아직 업로드된 관리현황이 없습니다.</p>
       <Link href="/upload" className="mt-3 inline-block text-sm text-accent hover:underline">
         관리자 업로드에서 관리현황 엑셀 올리기

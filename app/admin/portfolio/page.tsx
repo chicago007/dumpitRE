@@ -5,9 +5,44 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdmin } from "@/components/auth/require-admin";
 import { Button } from "@/components/ui/button";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { formatRateInput, canonicalRateInput } from "@/lib/lab/portfolio-ui";
 import type { LabFund, LabFundStatus } from "@/lib/types";
 
 type RowEdit = LabFund & { dirty?: boolean };
+
+function PercentRateInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  className: string;
+}) {
+  const [text, setText] = useState(() => formatRateInput(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(formatRateInput(value));
+  }, [value, focused]);
+
+  return (
+    <input
+      className={className}
+      inputMode="decimal"
+      value={text}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        const parsed = canonicalRateInput(text);
+        setText(parsed ?? "");
+        onChange(parsed);
+      }}
+    />
+  );
+}
 
 function eokToWon(eok: string): number | null {
   const t = eok.trim();
@@ -80,7 +115,7 @@ export default function AdminPortfolioManagePage() {
     const key = q.trim().toLowerCase();
     if (!key) return rows;
     return rows.filter((r) =>
-      [r.name, r.fundName, r.siteAddress, r.businessDesc, r.developer, r.contractor]
+      [r.name, r.fundName, r.productCode, r.fundCode, r.siteAddress, r.businessDesc, r.developer, r.contractor]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(key))
     );
@@ -229,13 +264,15 @@ export default function AdminPortfolioManagePage() {
           {loading ? (
             <p className="text-sm text-muted">불러오는 중…</p>
           ) : (
-            <div className="max-h-[calc(100vh-12rem)] overflow-auto rounded-lg border border-border">
+            <HorizontalScroll className="max-h-[calc(100vh-12rem)] overflow-y-auto rounded-lg border border-border">
               <table className="min-w-max border-collapse text-xs">
                 <thead>
                   <tr>
                     <th className={`${head} sticky left-0 z-20 min-w-[9rem]`}>랩명</th>
                     <th className={head}>상태</th>
                     <th className={head}>펀드명</th>
+                    <th className={head}>상품코드</th>
+                    <th className={head}>펀드코드</th>
                     <th className={head}>사업장 주소</th>
                     <th className={head}>사업내용</th>
                     <th className={head}>매입기관</th>
@@ -300,6 +337,8 @@ export default function AdminPortfolioManagePage() {
                         {(
                           [
                             ["fundName", row.fundName, "w-32"],
+                            ["productCode", row.productCode, "w-28"],
+                            ["fundCode", row.fundCode, "w-28"],
                             ["siteAddress", row.siteAddress, "w-52"],
                             ["businessDesc", row.businessDesc, "w-40"],
                             ["purchaseAgency", row.purchaseAgency, "w-20"],
@@ -325,27 +364,19 @@ export default function AdminPortfolioManagePage() {
                           </td>
                         ))}
                         <td className="border border-border p-0">
-                          <input
+                          <PercentRateInput
                             className={`${cell} w-16`}
-                            value={row.interestRate ?? ""}
-                            onChange={(e) =>
-                              patchRow(row.id, {
-                                interestRate: e.target.value
-                                  ? Number(e.target.value)
-                                  : null,
-                              })
+                            value={row.interestRate}
+                            onChange={(interestRate) =>
+                              patchRow(row.id, { interestRate })
                             }
                           />
                         </td>
                         <td className="border border-border p-0">
-                          <input
+                          <PercentRateInput
                             className={`${cell} w-16`}
-                            value={row.feeRate ?? ""}
-                            onChange={(e) =>
-                              patchRow(row.id, {
-                                feeRate: e.target.value ? Number(e.target.value) : null,
-                              })
-                            }
+                            value={row.feeRate}
+                            onChange={(feeRate) => patchRow(row.id, { feeRate })}
                           />
                         </td>
                         <td className="border border-border p-0">
@@ -461,7 +492,7 @@ export default function AdminPortfolioManagePage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </HorizontalScroll>
           )}
         </div>
       </AppShell>

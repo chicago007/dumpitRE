@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import type { ComponentType } from "react";
 import {
+  BarChart3,
   Building2,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
+  Coins,
   LogIn,
   LogOut,
+  Map,
   MapPinned,
   MessageSquare,
+  Percent,
   Settings2,
   Table2,
   Upload,
@@ -25,10 +31,20 @@ type NavItem = {
   exact?: boolean;
 };
 
+const overviewSubNav: NavItem[] = [
+  { href: "/management/setup-repayment", label: "설정·상환 추이", icon: BarChart3 },
+  { href: "/management/fee-trend", label: "수수료 추이", icon: Percent },
+  { href: "/management/by-entity", label: "업체별 현황", icon: Building2 },
+  { href: "/management/by-region", label: "지역별 현황", icon: Map },
+];
+
+const interestSubNav: NavItem[] = [
+  { href: "/management/interest/maturity", label: "만기 캘린더", icon: CalendarClock },
+  { href: "/management/interest/schedule", label: "이자 분배 스케줄", icon: Coins },
+];
+
 const managementNav: NavItem[] = [
-  { href: "/management", label: "전체 현황", icon: ClipboardList, exact: true },
   { href: "/management/sites", label: "사업장별(회차별)", icon: MapPinned },
-  { href: "/management/interest", label: "분배금/만기일", icon: CalendarDays },
 ];
 
 const workNav: NavItem[] = [
@@ -54,22 +70,107 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+        "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
         active
-          ? "bg-white font-medium text-foreground shadow-sm"
-          : "text-muted hover:bg-white/60 hover:text-foreground"
+          ? "bg-white font-medium text-sidebar-foreground shadow-sm"
+          : "text-sidebar-muted hover:bg-white/45 hover:text-sidebar-foreground"
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className={cn("h-4 w-4 shrink-0", active && "text-sidebar-active")} />
       <span className="leading-tight">{item.label}</span>
     </Link>
   );
 }
 
-export function Sidebar() {
+function NavSubLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const active = pathname === item.href;
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-2 rounded-lg py-1.5 pr-2 pl-2 text-[13px] transition-colors",
+        active
+          ? "bg-white font-medium text-sidebar-foreground shadow-sm"
+          : "text-sidebar-muted hover:bg-white/45 hover:text-sidebar-foreground"
+      )}
+    >
+      <Icon className={cn("h-3.5 w-3.5 shrink-0", active && "text-sidebar-active")} />
+      <span className="leading-tight">{item.label}</span>
+    </Link>
+  );
+}
+
+function OverviewNavGroup({ pathname }: { pathname: string }) {
+  const parentActive = pathname === "/management";
+  const Icon = ClipboardList;
+
+  return (
+    <div className="space-y-0.5">
+      <Link
+        href="/management"
+        className={cn(
+          "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
+          parentActive
+            ? "bg-white font-medium text-sidebar-foreground shadow-sm"
+            : "text-sidebar-muted hover:bg-white/45 hover:text-sidebar-foreground"
+        )}
+      >
+        <Icon className={cn("h-4 w-4 shrink-0", parentActive && "text-sidebar-active")} />
+        <span className="leading-tight">전체 현황</span>
+      </Link>
+      <div className="ml-5 flex flex-col gap-0.5 border-l border-im-beige/70 py-0.5 pl-2">
+        {overviewSubNav.map((item) => (
+          <NavSubLink key={item.href} item={item} pathname={pathname} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InterestNavGroup({ pathname }: { pathname: string }) {
+  const parentActive = pathname === "/management/interest";
+  const Icon = CalendarDays;
+
+  return (
+    <div className="space-y-0.5">
+      <Link
+        href="/management/interest"
+        className={cn(
+          "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
+          parentActive
+            ? "bg-white font-medium text-sidebar-foreground shadow-sm"
+            : "text-sidebar-muted hover:bg-white/45 hover:text-sidebar-foreground"
+        )}
+      >
+        <Icon className={cn("h-4 w-4 shrink-0", parentActive && "text-sidebar-active")} />
+        <span className="leading-tight">분배금/만기일</span>
+      </Link>
+      <div className="ml-5 flex flex-col gap-0.5 border-l border-im-beige/70 py-0.5 pl-2">
+        {interestSubNav.map((item) => (
+          <NavSubLink key={item.href} item={item} pathname={pathname} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function Sidebar({
+  mobileOpen = false,
+  onMobileClose,
+}: {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, isAdmin, logout } = useAuth();
+  const onMobileCloseRef = useRef(onMobileClose);
+  onMobileCloseRef.current = onMobileClose;
+
+  useEffect(() => {
+    onMobileCloseRef.current?.();
+  }, [pathname]);
 
   async function handleLogout() {
     await logout();
@@ -78,23 +179,29 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-border bg-sidebar">
-      <div className="shrink-0 px-4 py-5">
+    <aside
+      className={cn(
+        "flex h-full w-[220px] shrink-0 flex-col border-r border-im-beige/60 bg-sidebar text-sidebar-foreground",
+        "fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}
+    >
+      <div className="shrink-0 border-b border-im-beige/50 px-4 py-5">
         <Link href="/management" className="block">
-          <p className="text-base font-semibold">Dumpit RE</p>
-          <p className="text-xs text-muted">사업장 관리</p>
-        </Link>
-      </div>
-      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2">
-        <div>
-          <p className="mb-1 px-3 text-[11px] font-medium tracking-wide text-muted uppercase">
-            관리현황
+          <p className="text-base font-semibold tracking-tight text-im-gray">
+            Dumpit <span className="im-gradient-text font-bold">RE</span>
           </p>
-          <div className="flex flex-col gap-0.5">
-            {managementNav.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} />
-            ))}
-          </div>
+          <p className="text-xs text-sidebar-muted">사업장 관리</p>
+        </Link>
+        <div className="im-gradient-bg mt-3 h-1 w-12 rounded-full opacity-80" aria-hidden />
+      </div>
+      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 py-3">
+        <div className="flex flex-col gap-0.5">
+          <OverviewNavGroup pathname={pathname} />
+          <InterestNavGroup pathname={pathname} />
+          {managementNav.map((item) => (
+            <NavLink key={item.href} item={item} pathname={pathname} />
+          ))}
         </div>
 
         <div className="flex flex-col gap-0.5">
@@ -105,7 +212,7 @@ export function Sidebar() {
 
         {isAdmin ? (
           <div>
-            <p className="mb-1 px-3 text-[11px] font-medium tracking-wide text-muted uppercase">
+            <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-sidebar-muted uppercase">
               관리자
             </p>
             <div className="flex flex-col gap-0.5">
@@ -116,19 +223,19 @@ export function Sidebar() {
           </div>
         ) : null}
       </nav>
-      <div className="shrink-0 space-y-2 border-t border-border px-4 py-4">
+      <div className="shrink-0 space-y-2 border-t border-im-beige/50 px-4 py-4">
         {loading ? (
-          <p className="text-xs text-muted">확인 중…</p>
+          <p className="text-xs text-sidebar-muted">확인 중…</p>
         ) : user ? (
           <>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-sidebar-muted">
               {user.role === "admin" ? "관리자 모드" : "일반 모드"}
             </p>
-            <p className="text-sm">{user.name}</p>
+            <p className="text-sm font-medium text-sidebar-foreground">{user.name}</p>
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground"
+              className="flex items-center gap-1.5 text-xs text-sidebar-muted hover:text-sidebar-active"
             >
               <LogOut className="h-3.5 w-3.5" />
               로그아웃
@@ -136,10 +243,10 @@ export function Sidebar() {
           </>
         ) : (
           <>
-            <p className="text-xs text-muted">로그인 필요</p>
+            <p className="text-xs text-sidebar-muted">로그인 필요</p>
             <Link
               href="/login"
-              className="flex items-center gap-1.5 text-xs text-accent hover:underline"
+              className="flex items-center gap-1.5 text-xs text-sidebar-active hover:underline"
             >
               <LogIn className="h-3.5 w-3.5" />
               로그인

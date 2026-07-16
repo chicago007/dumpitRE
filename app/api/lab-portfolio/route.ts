@@ -7,7 +7,9 @@ import {
 
 export async function GET() {
   const portfolio = getLabPortfolio();
-  return NextResponse.json(portfolio);
+  return NextResponse.json(portfolio, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 export async function PATCH(req: NextRequest) {

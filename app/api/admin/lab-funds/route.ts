@@ -7,6 +7,7 @@ import {
   normalizeInterestPayments,
   updateLabFund,
 } from "@/lib/data/lab-portfolio";
+import { normalizeRateValue } from "@/lib/lab/portfolio-ui";
 import type { LabFund, LabFundStatus } from "@/lib/types";
 
 function requireAdmin() {
@@ -95,13 +96,17 @@ export async function PUT(req: NextRequest) {
   const numKeys = [
     "setupAmount",
     "balance",
-    "interestRate",
-    "feeRate",
     "plannedProgressPct",
     "actualProgressPct",
   ] as const;
   for (const key of numKeys) {
     if (key in body) (patch as Record<string, number | null>)[key] = num(body[key]);
+  }
+  if ("interestRate" in body) {
+    patch.interestRate = normalizeRateValue(body.interestRate);
+  }
+  if ("feeRate" in body) {
+    patch.feeRate = normalizeRateValue(body.feeRate);
   }
   if ("status" in body) {
     const s = String(body.status);

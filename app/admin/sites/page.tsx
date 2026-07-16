@@ -18,12 +18,38 @@ const filters = [
 export default function AdminSitesProgressPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [filter, setFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/sites")
-      .then((r) => r.json())
-      .then(setSites)
-      .catch(console.error);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch("/api/sites", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            typeof data?.error === "string" ? data.error : `불러오기 실패 (${res.status})`
+          );
+        }
+        return data as Site[];
+      })
+      .then((data) => {
+        if (!cancelled) setSites(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "사업장 목록을 불러오지 못했습니다.");
+          setSites([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered =
@@ -67,9 +93,21 @@ export default function AdminSitesProgressPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {display.map((site) => (
-            <SiteCard key={site.id} site={site} />
-          ))}
+          {loading ? (
+            <p className="text-sm text-muted">불러오는 중…</p>
+          ) : error ? (
+            <div className="col-span-full rounded-lg border border-dashed border-border bg-card p-6 text-sm">
+              <p className="text-muted">{error}</p>
+              <p className="mt-2 text-xs text-muted">
+                Supabase 연결이 안 되면 로컬 시드 데이터로 대체됩니다. 개발 서버가 실행 중인지
+                확인한 뒤 새로고침해 보세요.
+              </p>
+            </div>
+          ) : display.length === 0 ? (
+            <p className="text-sm text-muted">표시할 사업장이 없습니다.</p>
+          ) : (
+            display.map((site) => <SiteCard key={site.id} site={site} />)
+          )}
         </div>
       </div>
     </AppShell>

@@ -202,13 +202,13 @@ export function parseProposalText(rawText: string, fileName: string): ParsedProp
     text.match(/연\s*([\d.]+)\s*%/);
   if (rateMatch) {
     const n = Number(rateMatch[1]);
-    if (Number.isFinite(n)) result.interestRate = n > 1 ? n : n * 100;
+    if (Number.isFinite(n)) result.interestRate = n;
   }
 
   const feeMatch = text.match(/(?:운용사\s*특별\s*용역\s*보수|특별용역보수)[^\d%]{0,20}([\d.]+)\s*%/);
   if (feeMatch) {
     const n = Number(feeMatch[1]);
-    if (Number.isFinite(n)) result.feeRate = n > 1 ? n : n * 100;
+    if (Number.isFinite(n)) result.feeRate = n;
   }
 
   const shMatch = text.match(/\b(SH|GH|LH)\b/);

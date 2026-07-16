@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdmin } from "@/components/auth/require-admin";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { formatCurrency } from "@/lib/utils";
 import type { ProductMaster } from "@/lib/types";
 
@@ -113,7 +114,7 @@ export default function AdminProductsPage() {
           은 관리자만 확인합니다.
         </p>
 
-        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <section className="shadow-card rounded-xl border border-border bg-card p-4">
           <h2 className="text-sm font-semibold">
             {editingId ? "상품 수정" : "신규 상품 등록"}
           </h2>
@@ -167,30 +168,30 @@ export default function AdminProductsPage() {
           {message ? <p className="mt-2 text-xs text-muted">{message}</p> : null}
         </section>
 
-        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <section className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border px-4 py-3">
             <p className="text-xs text-muted">
               등록된 상품 목록 ({products.length}) · 랩/펀드 미입력 우선 · 랩명 내림차순
             </p>
           </div>
-          <div className="max-h-[min(60vh,640px)] overflow-auto">
+          <HorizontalScroll className="max-h-[min(60vh,640px)] overflow-y-auto">
             {loading ? (
               <p className="p-4 text-sm text-muted">불러오는 중…</p>
             ) : (
               <table className="w-max min-w-full border-separate border-spacing-0 text-left text-sm">
                 <thead className="text-xs text-muted">
                   <tr>
-                    <th className="sticky top-0 bg-neutral-50 px-4 py-2.5 font-medium">랩명</th>
-                    <th className="sticky top-0 bg-neutral-50 px-4 py-2.5 font-medium">펀드명</th>
-                    <th className="sticky top-0 bg-neutral-50 px-4 py-2.5 font-medium">사업장 주소</th>
-                    <th className="sticky top-0 bg-neutral-50 px-4 py-2.5 font-medium">제안서 여부</th>
-                    <th className="sticky top-0 bg-neutral-50 px-4 py-2.5 font-medium">규모</th>
-                    <th className="sticky top-0 bg-neutral-50 px-4 py-2.5 font-medium">액션</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">랩명</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">펀드명</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">사업장 주소</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">제안서 여부</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">규모</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">액션</th>
                   </tr>
                 </thead>
                 <tbody>
                   {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-neutral-50/80">
+                    <tr key={p.id} className="hover:bg-slate-100/80">
                       <td className="whitespace-nowrap border-t border-border px-4 py-2.5 font-medium">
                         {p.labName || "—"}
                       </td>
@@ -231,7 +232,7 @@ export default function AdminProductsPage() {
                 </tbody>
               </table>
             )}
-          </div>
+          </HorizontalScroll>
         </section>
       </div>
     </AppShell>

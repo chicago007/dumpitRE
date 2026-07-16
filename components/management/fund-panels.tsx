@@ -2,16 +2,15 @@
 
 import { useEffect, useState } from "react";
 import type { LabFund } from "@/lib/types";
-import { formatRate, progressLabel } from "@/lib/lab/portfolio-ui";
+import { formatRate, isRepaidFund } from "@/lib/lab/portfolio-ui";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
+import { FundStatusBadge } from "@/components/ui/fund-status-badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/use-auth";
 
 function statusBadge(status: LabFund["status"]) {
-  if (status === "active") return <Badge variant="success">진행중</Badge>;
-  if (status === "repaid") return <Badge variant="default">상환완료</Badge>;
-  return <Badge>미확인</Badge>;
+  return <FundStatusBadge status={status} />;
 }
 
 function isUpcoming(date: string): boolean {
@@ -21,6 +20,70 @@ function isUpcoming(date: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return d >= today;
+}
+
+/** 공정율 또는 상환완료 표시 */
+export function FundProgressBadge({
+  fund,
+  variant = "inline",
+}: {
+  fund: Pick<LabFund, "actualProgressPct" | "repaymentDate" | "status">;
+  variant?: "inline" | "header";
+}) {
+  const repaid = isRepaidFund(fund);
+  const pct =
+    fund.actualProgressPct != null ? `${Math.round(fund.actualProgressPct)}%` : "—";
+
+  const repaidLabel = (
+    <span className="im-gradient-text font-extrabold tracking-tight">상환완료</span>
+  );
+
+  if (variant === "header") {
+    return (
+      <div
+        className={cn(
+          "flex shrink-0 flex-col items-center justify-center rounded-md border px-2",
+          repaid
+            ? "repaid-blink h-16 min-w-[5.5rem] border-im-purple bg-gradient-to-br from-im-purple/30 via-white to-im-lime/25"
+            : "h-16 w-16 border-im-mint/40 bg-gradient-to-br from-im-mint/10 to-white"
+        )}
+      >
+        <span
+          className={cn(
+            "text-xs font-medium leading-none",
+            repaid ? "font-semibold text-[#6b4fa8]" : "text-im-mint"
+          )}
+        >
+          {repaid ? "✓ 완료" : "공정율"}
+        </span>
+        <span
+          className={cn(
+            "mt-1.5 text-center leading-tight",
+            repaid ? "text-sm" : "text-base font-semibold tabular-nums leading-none text-foreground"
+          )}
+        >
+          {repaid ? repaidLabel : pct}
+        </span>
+      </div>
+    );
+  }
+
+  if (repaid) {
+    return (
+      <span className="repaid-blink inline-flex items-center gap-1 rounded-md border border-im-purple bg-im-purple/30 px-2.5 py-1 text-sm shadow-sm">
+        <span className="text-im-mint" aria-hidden>
+          ✓
+        </span>
+        {repaidLabel}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-md border border-im-light-blue/50 bg-im-light-blue/15 px-2 py-1 text-sm font-semibold tabular-nums text-[#0d7a7d]">
+      {pct}
+    </span>
+  );
 }
 
 /** 부동산랩 × 회차 가로 보드 */
@@ -36,16 +99,16 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">부동산랩 회차별 현황</h3>
         <p className="text-xs text-muted">랩별 이자 지급 회차를 한눈에 봅니다.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-border bg-neutral-50 text-xs text-muted">
+          <thead className="border-b border-border bg-slate-100 text-xs text-muted">
             <tr>
-              <th className="sticky left-0 z-10 bg-neutral-50 px-4 py-3 font-medium">부동산랩</th>
+              <th className="sticky left-0 z-10 bg-slate-100 px-4 py-3 font-medium">부동산랩</th>
               <th className="px-3 py-3 font-medium">사업장</th>
               <th className="px-3 py-3 font-medium">상태</th>
               <th className="min-w-[120px] px-3 py-3 font-medium text-sky-800">
@@ -62,7 +125,7 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
             {funds.map((fund) => {
               const byRound = new Map(fund.interestPayments.map((p) => [p.round, p]));
               return (
-                <tr key={fund.id} id={fund.id} className="hover:bg-neutral-50/90">
+                <tr key={fund.id} id={fund.id} className="hover:bg-slate-100/80">
                   <td className="sticky left-0 z-10 bg-card px-4 py-3">
                     <p className="font-semibold">{fund.name}</p>
                     <p className="text-xs text-muted">
@@ -74,11 +137,7 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
                   </td>
                   <td className="px-3 py-3">{statusBadge(fund.status)}</td>
                   <td className="px-3 py-3">
-                    <span className="inline-flex rounded-md bg-sky-50 px-2 py-1 text-sm font-semibold tabular-nums text-sky-900">
-                      {fund.actualProgressPct != null
-                        ? `${fund.actualProgressPct}%`
-                        : "—"}
-                    </span>
+                    <FundProgressBadge fund={fund} />
                   </td>
                   {rounds.map((r) => {
                     const p = byRound.get(r);
@@ -105,17 +164,24 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
   );
 }
 
-/** 부동산랩 1건 · 회차 카드 */
-export function LabRoundCard({
+/** 사업장/회차별과 동일한 상세 패널 (툴팁·카드 공용) */
+export function LabRoundDetail({
   fund,
   embedded = false,
+  readOnly = false,
+  compact = false,
   onFundUpdated,
 }: {
   fund: LabFund;
   embedded?: boolean;
+  /** true면 진행현황 코멘트 조회만 */
+  readOnly?: boolean;
+  /** 툴팁 등 좁은 영역용 */
+  compact?: boolean;
   onFundUpdated?: (fund: LabFund) => void;
 }) {
   const { isAdmin } = useAuth();
+  const canEdit = isAdmin && !readOnly;
   const payments = [...fund.interestPayments].sort((a, b) => a.round - b.round);
   const [comment, setComment] = useState(fund.progressComment ?? "");
   const [saving, setSaving] = useState(false);
@@ -148,7 +214,7 @@ export function LabRoundCard({
   }
 
   const v = (x: string | null | undefined) => x?.trim() || "—";
-  const conditions: { label: string; value: string }[] = [
+  const conditions: { label: string; value: string | null | undefined }[] = [
     { label: "매입기관", value: v(fund.purchaseAgency) },
     {
       label: "설정액(잔액)",
@@ -165,17 +231,16 @@ export function LabRoundCard({
     { label: "상환일", value: v(fund.repaymentDate) },
     { label: "신탁사", value: v(fund.trustCompany) },
     { label: "신탁방식", value: v(fund.trustType) },
-    { label: "시행사", value: v(fund.developer) },
-    { label: "시공사", value: v(fund.contractor) },
-    { label: "대지면적", value: v(fund.landArea) },
-    { label: "건축면적", value: v(fund.buildingArea) },
-    { label: "연면적", value: v(fund.totalFloorArea) },
-    { label: "건축규모", value: v(fund.buildingScale) },
-    { label: "세대수", value: v(fund.householdCount) },
-    { label: "비고", value: v(fund.note) },
+    { label: "시행사", value: fund.developer },
+    { label: "시공사", value: fund.contractor },
+    { label: "대지면적", value: fund.landArea },
+    { label: "건축면적", value: fund.buildingArea },
+    { label: "연면적", value: fund.totalFloorArea },
+    { label: "건축규모", value: fund.buildingScale },
+    { label: "세대수", value: fund.householdCount },
+    { label: "비고", value: fund.note },
   ];
 
-  const actual = fund.actualProgressPct;
   const codeParts = [
     { label: "펀드명", value: fund.fundName },
     { label: "상품코드", value: fund.productCode },
@@ -188,41 +253,43 @@ export function LabRoundCard({
 
   return (
     <article
-      id={fund.id}
+      id={embedded ? undefined : fund.id}
       className={cn(
         "overflow-hidden bg-card",
-        !embedded && "rounded-xl border border-border shadow-sm"
+        !embedded && "shadow-card rounded-xl border border-border"
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-white px-5 py-4">
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-3 border-b border-border bg-white",
+          compact ? "px-3 py-3" : "px-5 py-4"
+        )}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h3 className="text-lg font-semibold">{fund.name}</h3>
+              <h3 className={cn("font-semibold", compact ? "text-base" : "text-lg")}>
+                {fund.name}
+              </h3>
               <span className="text-xs text-muted">{codeParts.join(" / ")}</span>
             </div>
-            <p className="mt-1 text-sm text-muted break-words">
-              {placeParts.join(" / ")}
-            </p>
+            <p className="mt-1 text-sm text-muted break-words">{placeParts.join(" / ")}</p>
           </div>
-          <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-md border border-sky-200 bg-sky-50">
-            <span className="text-xs font-medium leading-none text-sky-800">공정율</span>
-            <span className="mt-1.5 text-base font-semibold tabular-nums leading-none text-sky-950">
-              {actual != null ? `${actual}%` : "—"}
-            </span>
-          </div>
+          <FundProgressBadge fund={fund} variant="header" />
         </div>
         {statusBadge(fund.status)}
       </div>
 
-      <div className="space-y-5 p-5">
+      <div className={cn("space-y-5", compact ? "p-3" : "p-5")}>
         <div>
           <h4 className="mb-3 text-sm font-semibold">투자 주요 조건</h4>
-          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {conditions.map((item) => (
-              <Item key={item.label} label={item.label} value={item.value} />
-            ))}
-          </dl>
+          <HorizontalScroll>
+            <dl className="grid w-max min-w-full grid-cols-4 gap-3">
+              {conditions.map((item) => (
+                <Item key={item.label} label={item.label} value={item.value} />
+              ))}
+            </dl>
+          </HorizontalScroll>
         </div>
 
         <div>
@@ -235,14 +302,15 @@ export function LabRoundCard({
               등록된 회차가 없습니다.
             </p>
           ) : (
-            <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <HorizontalScroll>
+              <ol className="grid w-max grid-cols-4 gap-2">
               {payments.map((p) => {
                 const upcoming = isUpcoming(p.date);
                 return (
                   <li
                     key={`${fund.id}-${p.round}`}
                     className={cn(
-                      "rounded-lg border px-3 py-3",
+                      "w-36 shrink-0 rounded-lg border px-3 py-3",
                       upcoming ? "border-accent/30 bg-blue-50/60" : "border-border bg-neutral-50"
                     )}
                   >
@@ -259,21 +327,22 @@ export function LabRoundCard({
                   </li>
                 );
               })}
-            </ol>
+              </ol>
+            </HorizontalScroll>
           )}
         </div>
 
         <section className="rounded-lg border border-border bg-neutral-50/70 p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold">진행현황 코멘트</h4>
-            {isAdmin ? (
+            {canEdit ? (
               <span className="text-[11px] text-muted">관리자 편집</span>
             ) : (
               <span className="text-[11px] text-muted">조회 전용</span>
             )}
           </div>
 
-          {isAdmin ? (
+          {canEdit ? (
             <div className="space-y-2">
               <textarea
                 className="min-h-[6rem] w-full rounded-md border border-border bg-white px-3 py-2 text-sm"
@@ -301,11 +370,46 @@ export function LabRoundCard({
   );
 }
 
-function Item({ label, value }: { label: string; value: string }) {
+/** 부동산랩 1건 · 회차 카드 */
+export function LabRoundCard({
+  fund,
+  embedded = false,
+  onFundUpdated,
+}: {
+  fund: LabFund;
+  embedded?: boolean;
+  onFundUpdated?: (fund: LabFund) => void;
+}) {
   return (
-    <div>
+    <LabRoundDetail fund={fund} embedded={embedded} onFundUpdated={onFundUpdated} />
+  );
+}
+
+function splitDisplayLines(raw: string | null | undefined): string[] {
+  const s = raw?.trim();
+  if (!s) return ["—"];
+  const lines = s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  return lines.length ? lines : ["—"];
+}
+
+function Item({ label, value }: { label: string; value: string | null | undefined }) {
+  const lines = splitDisplayLines(value);
+  return (
+    <div className="min-w-[9rem]">
       <dt className="text-[11px] text-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm break-words tabular-nums">{value}</dd>
+      <dd className="mt-0.5 text-sm tabular-nums">
+        {lines.length === 1 ? (
+          <span className="break-words">{lines[0]}</span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {lines.map((line, i) => (
+              <span key={i} className="block break-words leading-snug">
+                {line}
+              </span>
+            ))}
+          </div>
+        )}
+      </dd>
     </div>
   );
 }

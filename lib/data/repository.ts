@@ -33,7 +33,13 @@ export function isSupabaseConfigured(): boolean {
 export { createChatSession };
 
 export async function listSites(filter?: { status?: string }): Promise<Site[]> {
-  if (isSupabaseServerConfigured()) return sbRepo.sbListSites(filter);
+  if (isSupabaseServerConfigured()) {
+    try {
+      return await sbRepo.sbListSites(filter);
+    } catch (err) {
+      console.warn("[sites] Supabase fetch failed, using seed:", err);
+    }
+  }
   const { isSiteDeleted } = await import("@/lib/data/deleted-masters");
   let items = seed.sites.filter((s) => !isSiteDeleted(s.id));
   if (filter?.status && filter.status !== "all") {

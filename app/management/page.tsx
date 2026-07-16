@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
+import { FundProgressBadge } from "@/components/management/fund-panels";
 import { RatioBars } from "@/components/management/ratio-donut";
-import { Badge } from "@/components/ui/badge";
+import { FundStatusBadge } from "@/components/ui/fund-status-badge";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import {
   encodeSiteParam,
   formatRate,
@@ -17,9 +19,7 @@ import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
 type Filter = "all" | "active" | "repaid";
 
 function statusBadge(status: LabFund["status"]) {
-  if (status === "active") return <Badge variant="success">진행중</Badge>;
-  if (status === "repaid") return <Badge variant="default">상환완료</Badge>;
-  return <Badge>미확인</Badge>;
+  return <FundStatusBadge status={status} />;
 }
 
 export default function ManagementOverviewPage() {
@@ -29,7 +29,7 @@ export default function ManagementOverviewPage() {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetch("/api/lab-portfolio")
+    fetch("/api/lab-portfolio", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => setPortfolio(data))
       .catch(console.error)
@@ -48,7 +48,7 @@ export default function ManagementOverviewPage() {
   }, [portfolio, filter]);
 
   const filterTabs = (
-    <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+    <div className="flex gap-1 rounded-lg border border-border bg-card p-1 shadow-card">
       {(
         [
           ["all", "전체"],
@@ -62,8 +62,8 @@ export default function ManagementOverviewPage() {
           onClick={() => setFilter(id)}
           className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
             filter === id
-              ? "bg-white text-foreground shadow-sm"
-              : "text-muted hover:text-foreground"
+              ? "bg-accent font-semibold text-accent-foreground shadow-sm"
+              : "text-muted hover:bg-accent/10 hover:text-foreground"
           }`}
         >
           {label}
@@ -78,9 +78,9 @@ export default function ManagementOverviewPage() {
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
         ) : !portfolio ? (
-          <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center shadow-sm">
+          <div className="shadow-card rounded-xl border border-dashed border-border bg-card p-10 text-center">
             <p className="text-sm text-muted">아직 업로드된 관리현황이 없습니다.</p>
-            <Link href="/upload" className="mt-3 inline-block text-sm text-accent hover:underline">
+            <Link href="/upload" className="text-link mt-3 inline-block text-sm hover:underline">
               업로드에서 관리현황 엑셀 올리기
             </Link>
           </div>
@@ -115,50 +115,50 @@ export default function ManagementOverviewPage() {
               ]}
             />
 
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
               <div className="border-b border-border px-4 py-3">
                 <p className="text-xs text-muted">
                   목록 (랩·사업장명을 누르면 사업장별 현황으로 이동합니다)
                 </p>
               </div>
-              <div className="max-h-[min(70vh,720px)] overflow-x-auto overflow-y-auto">
+              <HorizontalScroll className="max-h-[min(70vh,720px)] overflow-y-auto">
                 <table className="w-max border-separate border-spacing-0 text-left text-sm">
                   <thead className="text-xs text-muted">
                     <tr>
-                      <th className="sticky top-0 left-0 z-30 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 left-0 z-30 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium text-foreground shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         랩
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         사업장
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         약정
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         설정액
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         잔액
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         금리
                       </th>
-                      <th className="sticky top-0 z-20 min-w-[120px] whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 min-w-[120px] whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         실행공정율
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         설정일
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         만기
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         대출 만기일
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         상환일
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         상태
                       </th>
                     </tr>
@@ -167,11 +167,11 @@ export default function ManagementOverviewPage() {
                     {funds.map((f) => {
                       const key = siteKey(f);
                       return (
-                        <tr key={f.id} className="hover:bg-neutral-50/90">
+                        <tr key={f.id} className="hover:bg-slate-100/90">
                           <td className="sticky left-0 z-10 whitespace-nowrap border-t border-border bg-card px-4 py-3">
                             <Link
                               href={`/management/sites?lab=${encodeURIComponent(f.id)}`}
-                              className="font-medium text-accent hover:underline"
+                              className="text-link font-medium hover:underline"
                             >
                               {f.name}
                             </Link>
@@ -182,7 +182,7 @@ export default function ManagementOverviewPage() {
                           <td className="whitespace-nowrap border-t border-border px-4 py-3">
                             <Link
                               href={`/management/sites?site=${encodeSiteParam(key)}`}
-                              className="font-medium text-accent hover:underline"
+                              className="text-link font-medium hover:underline"
                             >
                               {f.siteAddress ?? "사업장 미기재"}
                             </Link>
@@ -202,10 +202,8 @@ export default function ManagementOverviewPage() {
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 tabular-nums">
                             {formatRate(f.interestRate)}
                           </td>
-                          <td className="whitespace-nowrap border-t border-border px-4 py-3 text-sm tabular-nums">
-                            {f.actualProgressPct != null
-                              ? `${Math.round(f.actualProgressPct)}%`
-                              : "—"}
+                          <td className="whitespace-nowrap border-t border-border px-4 py-3 text-sm">
+                            <FundProgressBadge fund={f} />
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 text-xs tabular-nums">
                             {f.setupDate ?? "—"}
@@ -227,7 +225,7 @@ export default function ManagementOverviewPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </HorizontalScroll>
             </div>
           </>
         )}

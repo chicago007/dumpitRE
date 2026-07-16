@@ -104,8 +104,8 @@ export interface LabFund {
   repaymentDate: string | null;
   setupAmount: number | null;
   balance: number | null;
-  interestRate: number | null;
-  feeRate: number | null;
+  interestRate: string | null;
+  feeRate: string | null;
   /** 신탁방식 (예: 관리형 토지신탁) */
   trustType: string | null;
   /** 신탁사 */

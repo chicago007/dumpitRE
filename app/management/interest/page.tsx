@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { sortLabFunds } from "@/lib/lab/portfolio-ui";
 import { cn } from "@/lib/utils";
 import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
@@ -120,7 +121,7 @@ export default function InterestPage() {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetch("/api/lab-portfolio")
+    fetch("/api/lab-portfolio", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => setPortfolio(data))
       .catch(console.error)
@@ -218,7 +219,7 @@ export default function InterestPage() {
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
         ) : !portfolio ? (
-          <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center shadow-sm">
+          <div className="shadow-card rounded-xl border border-dashed border-border bg-card p-10 text-center">
             <p className="text-sm text-muted">아직 업로드된 관리현황이 없습니다.</p>
             <Link href="/upload" className="mt-3 inline-block text-sm text-accent hover:underline">
               업로드에서 관리현황 엑셀 올리기
@@ -227,7 +228,8 @@ export default function InterestPage() {
         ) : (
           <>
             {viewMode === "list" ? (
-              <div className="grid gap-4 lg:grid-cols-2">
+              <HorizontalScroll>
+                <div className="grid min-w-[640px] grid-cols-2 gap-4">
                 <DateList
                   title="분배금 지급일"
                   items={distributions}
@@ -238,7 +240,8 @@ export default function InterestPage() {
                   items={maturities}
                   empty="예정된 만기일이 없습니다."
                 />
-              </div>
+                </div>
+              </HorizontalScroll>
             ) : (
               <CalendarBoard
                 year={cursor.year}
@@ -254,35 +257,35 @@ export default function InterestPage() {
               />
             )}
 
-            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <section className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
               <div className="border-b border-border px-4 py-3">
                 <p className="text-xs text-muted">
                   회차별 스케줄 (설정일 → 대출만기일 → 만기일 → 상환일 → 1차…)
                 </p>
               </div>
-              <div className="max-h-[min(60vh,640px)] overflow-x-auto overflow-y-auto">
+              <HorizontalScroll className="max-h-[min(60vh,640px)] overflow-y-auto">
                 <table className="w-max border-separate border-spacing-0 text-left text-sm">
                   <thead className="text-xs text-muted">
                     <tr>
-                      <th className="sticky top-0 left-0 z-30 whitespace-nowrap bg-neutral-50 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 left-0 z-30 whitespace-nowrap bg-slate-100 px-4 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         부동산랩
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         설정일
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         대출만기일
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         만기일
                       </th>
-                      <th className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         상환일
                       </th>
                       {rounds.map((r) => (
                         <th
                           key={r}
-                          className="sticky top-0 z-20 whitespace-nowrap bg-neutral-50 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]"
+                          className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]"
                         >
                           {r}차
                         </th>
@@ -293,7 +296,7 @@ export default function InterestPage() {
                     {funds.map((f) => {
                       const byRound = new Map(f.interestPayments.map((p) => [p.round, p]));
                       return (
-                        <tr key={f.id} className="hover:bg-neutral-50/80">
+                        <tr key={f.id} className="hover:bg-slate-100/80">
                           <td className="sticky left-0 z-10 whitespace-nowrap border-t border-border bg-card px-4 py-2.5 font-medium">
                             {f.name}
                           </td>
@@ -316,7 +319,7 @@ export default function InterestPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </HorizontalScroll>
             </section>
           </>
         )}
@@ -348,13 +351,13 @@ function CalendarBoard({
   const title = `${year}년 ${month + 1}월`;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
-            className="rounded-md border border-border p-1.5 text-muted hover:bg-neutral-50 hover:text-foreground"
+            className="rounded-md border border-border p-1.5 text-muted hover:bg-slate-100 hover:text-foreground"
             aria-label="이전 달"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -363,7 +366,7 @@ function CalendarBoard({
           <button
             type="button"
             onClick={onNext}
-            className="rounded-md border border-border p-1.5 text-muted hover:bg-neutral-50 hover:text-foreground"
+            className="rounded-md border border-border p-1.5 text-muted hover:bg-slate-100 hover:text-foreground"
             aria-label="다음 달"
           >
             <ChevronRight className="h-4 w-4" />
@@ -371,7 +374,7 @@ function CalendarBoard({
           <button
             type="button"
             onClick={onToday}
-            className="ml-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-neutral-50 hover:text-foreground"
+            className="ml-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-slate-100 hover:text-foreground"
           >
             오늘
           </button>
@@ -386,7 +389,7 @@ function CalendarBoard({
         </div>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-border bg-neutral-50 text-center text-[11px] font-medium text-muted">
+      <div className="grid grid-cols-7 border-b border-border bg-slate-100 text-center text-[11px] font-medium text-muted">
         {weekdays.map((d) => (
           <div key={d} className="px-2 py-2">
             {d}
@@ -397,7 +400,7 @@ function CalendarBoard({
       <div className="grid grid-cols-7 auto-rows-[minmax(6.5rem,auto)]">
         {cells.map((cell, idx) => {
           if (!cell) {
-            return <div key={`empty-${idx}`} className="border-t border-r border-border bg-neutral-50/40" />;
+            return <div key={`empty-${idx}`} className="border-t border-r border-border bg-slate-100/40" />;
           }
           const events = eventsByDate.get(cell.iso) ?? [];
           const isToday = cell.iso === todayIso;
@@ -475,7 +478,7 @@ function DateList({
   empty: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">{title}</h3>
       </div>

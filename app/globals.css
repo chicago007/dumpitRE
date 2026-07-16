@@ -1,17 +1,35 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #f3f4f6;
-  --color-foreground: #0a0a0a;
-  --color-muted: #737373;
-  --color-border: #e5e7eb;
+  /* iM Primary */
+  --color-im-mint: #00c7a9;
+  --color-im-lime: #e2f15e;
+  /* iM Secondary */
+  --color-im-blue: #7db5ff;
+  --color-im-purple: #d1b5ff;
+  --color-im-light-blue: #53e1e5;
+  --color-im-beige: #cdc9b7;
+  /* iM Logotype */
+  --color-im-gray: #666666;
+
+  --color-background: #f7f6f2;
+  --color-foreground: #333333;
+  --color-muted: #666666;
+  --color-border: #e5e3da;
   --color-card: #ffffff;
-  --color-accent: #2563eb;
+  --color-accent: #00c7a9;
+  --color-accent-hover: #00a892;
   --color-accent-foreground: #ffffff;
-  --color-sidebar: #f8fafc;
-  --color-success: #16a34a;
+  --color-link: #00a892;
+  --color-repaid: #d1b5ff;
+  --color-sidebar: #eefcf9;
+  --color-sidebar-foreground: #333333;
+  --color-sidebar-muted: #666666;
+  --color-sidebar-active: #00c7a9;
+  --color-success: #00c7a9;
   --color-warning: #ca8a04;
   --color-danger: #dc2626;
+  --color-table-head: #f3f2ec;
   --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -25,4 +43,62 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
+}
+
+.text-link {
+  color: var(--color-link);
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.im-gradient-bg {
+  background: linear-gradient(90deg, #00c7a9 0%, #e2f15e 100%);
+}
+
+.im-gradient-text {
+  background: linear-gradient(90deg, #00c7a9 0%, #e2f15e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.shadow-card {
+  box-shadow:
+    0 1px 2px rgb(0 199 169 / 0.06),
+    0 2px 8px rgb(102 102 102 / 0.05);
+}
+
+.bg-table-head {
+  background-color: var(--color-table-head);
+}
+
+@keyframes repaid-blink {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow:
+      0 0 0 2px rgb(209 181 255 / 0.55),
+      0 0 14px rgb(0 199 169 / 0.25);
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.82;
+    box-shadow:
+      0 0 0 3px rgb(226 241 94 / 0.5),
+      0 0 22px rgb(209 181 255 / 0.55),
+      0 0 32px rgb(0 199 169 / 0.2);
+    filter: brightness(1.04);
+  }
+}
+
+.repaid-blink {
+  animation: repaid-blink 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repaid-blink {
+    animation: none;
+  }
 }

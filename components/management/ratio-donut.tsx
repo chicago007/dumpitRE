@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
 export interface RatioBarItem {
   label: string;
@@ -16,8 +17,9 @@ interface RatioBarsProps {
 
 export function RatioBars({ items }: RatioBarsProps) {
   return (
-    <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
-      <div className="grid gap-4 sm:grid-cols-2 sm:gap-8">
+    <div className="shadow-card rounded-xl border border-border bg-card px-5 py-4">
+      <HorizontalScroll>
+        <div className="grid min-w-[520px] grid-cols-2 gap-8">
         {items.map((item) => {
           const pct = Number.isFinite(item.ratio)
             ? Math.min(100, Math.max(0, item.ratio * 100))
@@ -50,7 +52,8 @@ export function RatioBars({ items }: RatioBarsProps) {
             </div>
           );
         })}
-      </div>
+        </div>
+      </HorizontalScroll>
     </div>
   );
 }
