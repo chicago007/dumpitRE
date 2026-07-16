@@ -9,14 +9,14 @@ import {
 import { matchProduct, upsertProduct } from "@/lib/data/product-registry";
 import type { ProductMaster } from "@/lib/types";
 
-function addressLooksLikeOtherLab(
+async function addressLooksLikeOtherLab(
   location: string | null | undefined,
   labName: string
-): boolean {
+): Promise<boolean> {
   const loc = (location ?? "").replace(/\s+/g, "");
   const labNum = extractLabNumber(labName);
   if (!loc || loc.length < 8 || !labNum) return false;
-  const portfolio = getLabPortfolio();
+  const portfolio = await getLabPortfolio();
   if (!portfolio) return false;
   for (const f of portfolio.funds) {
     const otherNum = extractLabNumber(f.name);
@@ -31,22 +31,22 @@ function addressLooksLikeOtherLab(
 }
 
 /** 제안서 파싱 결과로 상품 마스터·랩 현황(마스터) 자동 반영 */
-export function applyProposalMasterData(
+export async function applyProposalMasterData(
   parsed: ParsedProposal,
   existing: ProductMaster | null,
   fileName: string,
   options?: { preserveIdentity?: boolean }
-): { product: ProductMaster; siteId: string; applied: string[] } {
+): Promise<{ product: ProductMaster; siteId: string; applied: string[] }> {
   const applied: string[] = [];
   const preserveIdentity = options?.preserveIdentity ?? false;
   const labName = parsed.labName?.trim() || existing?.labName || "";
 
-  const portfolioFund = getLabPortfolio()?.funds.find(
+  const portfolioFund = (await getLabPortfolio())?.funds.find(
     (f) => f.name.replace(/\s+/g, "") === labName.replace(/\s+/g, "")
   );
 
   const rawLocation = compactSiteAddress(parsed.location?.trim() || null);
-  const locationIsOtherLab = addressLooksLikeOtherLab(rawLocation, labName);
+  const locationIsOtherLab = await addressLooksLikeOtherLab(rawLocation, labName);
 
   const existingAddress =
     portfolioFund?.siteAddress?.trim() || existing?.siteAddress?.trim() || "";
@@ -83,15 +83,15 @@ export function applyProposalMasterData(
 
   const matched =
     existing ??
-    matchProduct({
+    (await matchProduct({
       siteName: parsed.siteName,
       fundName: parsed.fundName,
       location: parsed.location,
       fileName,
       labName: parsed.labName,
-    });
+    }));
 
-  let product = upsertProduct({
+  let product = await upsertProduct({
     id: matched?.id,
     labName,
     fundName,
@@ -119,10 +119,10 @@ export function applyProposalMasterData(
 
   const siteId = ensureSiteForProduct(product);
   if (product.siteId !== siteId) {
-    product = upsertProduct({ ...product, siteId });
+    product = await upsertProduct({ ...product, siteId });
   }
 
-  const fund = upsertLabFundFromProposal({
+  const fund = await upsertLabFundFromProposal({
     labName: product.labName || siteName,
     fundName: preserveIdentity ? undefined : product.fundName,
     siteAddress: siteAddress || undefined,

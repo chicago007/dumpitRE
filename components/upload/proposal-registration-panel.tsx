@@ -69,6 +69,9 @@ export function ProposalRegistrationPanel({
         {registration.suggestedBudget != null
           ? ` · 추정규모 ${formatCurrency(registration.suggestedBudget)}`
           : ""}
+        {registration.extractionSource
+          ? ` · 추출: ${registration.extractionSource === "gemini" ? "Gemini" : "규칙"}`
+          : ""}
       </p>
 
       <div className="mt-4 flex gap-2">

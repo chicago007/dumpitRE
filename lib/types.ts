@@ -173,6 +173,33 @@ export interface ProposalLabOption {
   siteAddress: string | null;
 }
 
+/** 제안서에서 추출한 투자 주요 조건 (비교표·등록 UI용) */
+export interface ProposalExtractedConditions {
+  siteName: string | null;
+  fundName: string | null;
+  labName: string | null;
+  totalBudget: number | null;
+  constructionPeriod: string | null;
+  location: string | null;
+  setupDate: string | null;
+  maturityDate: string | null;
+  loanMaturityDate: string | null;
+  interestRate: number | null;
+  feeRate: number | null;
+  purchaseAgency: string | null;
+  developer: string | null;
+  contractor: string | null;
+  trustCompany: string | null;
+  trustType: string | null;
+  businessDesc: string | null;
+  landArea: string | null;
+  buildingArea: string | null;
+  totalFloorArea: string | null;
+  buildingScale: string | null;
+  householdCount: string | null;
+  highlights: string[];
+}
+
 /** 제안서 업로드 후 신규/기존 확인 UI로 넘기는 페이로드 */
 export interface ProposalRegistrationPrompt {
   documentId: string;
@@ -187,4 +214,8 @@ export interface ProposalRegistrationPrompt {
   matchedLabel: string | null;
   labOptions: ProposalLabOption[];
   question: string;
+  /** 추출된 투자 주요 조건 (복수 업로드 시 비교표에 사용) */
+  parsed: ProposalExtractedConditions;
+  extractionSource?: "gemini" | "regex";
+  extractionWarning?: string | null;
 }

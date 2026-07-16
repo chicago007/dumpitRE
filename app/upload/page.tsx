@@ -7,9 +7,11 @@ import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdmin } from "@/components/auth/require-admin";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { ProposalRegistrationPanel } from "@/components/upload/proposal-registration-panel";
+import { ProposalConditionsTable } from "@/components/upload/proposal-conditions-table";
 import { Pill } from "@/components/ui/pill";
 import { Badge } from "@/components/ui/badge";
 import type { DocumentRecord, DocumentType, ProposalRegistrationPrompt } from "@/lib/types";
+import type { ParsedProposal } from "@/lib/analyzers/proposal";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,33 @@ const docTypes: { id: DocumentType; label: string }[] = [
   { id: "fund_schedule", label: "자금집행" },
 ];
 
-const REG_STORAGE_KEY = "dumpitre_pending_proposal_reg_v2";
+const REG_STORAGE_KEY = "dumpitre_pending_proposal_regs_v3";
+
+const EMPTY_PARSED: ParsedProposal = {
+  siteName: null,
+  fundName: null,
+  labName: null,
+  totalBudget: null,
+  constructionPeriod: null,
+  location: null,
+  setupDate: null,
+  maturityDate: null,
+  loanMaturityDate: null,
+  interestRate: null,
+  feeRate: null,
+  purchaseAgency: null,
+  developer: null,
+  contractor: null,
+  trustCompany: null,
+  trustType: null,
+  businessDesc: null,
+  landArea: null,
+  buildingArea: null,
+  totalFloorArea: null,
+  buildingScale: null,
+  householdCount: null,
+  highlights: [],
+};
 
 function isProposalFileName(fileName: string, selectedType: DocumentType): boolean {
   if (selectedType === "proposal") return true;
@@ -31,13 +59,22 @@ function isProposalFileName(fileName: string, selectedType: DocumentType): boole
   return /부동산\s*랩/.test(fileName) || /랩\s*제?\s*\d{1,3}\s*호/.test(fileName) || /\d{1,3}\s*호/.test(fileName);
 }
 
-function persistRegistration(reg: ProposalRegistrationPrompt | null) {
+function persistRegistrations(regs: ProposalRegistrationPrompt[]) {
   try {
-    if (reg) sessionStorage.setItem(REG_STORAGE_KEY, JSON.stringify(reg));
+    if (regs.length) sessionStorage.setItem(REG_STORAGE_KEY, JSON.stringify(regs));
     else sessionStorage.removeItem(REG_STORAGE_KEY);
   } catch {
     /* ignore */
   }
+}
+
+function upsertRegistrations(
+  prev: ProposalRegistrationPrompt[],
+  next: ProposalRegistrationPrompt[]
+): ProposalRegistrationPrompt[] {
+  const map = new Map(prev.map((r) => [r.documentId, r]));
+  for (const r of next) map.set(r.documentId, r);
+  return Array.from(map.values());
 }
 
 async function buildFallbackRegistration(
@@ -70,6 +107,12 @@ async function buildFallbackRegistration(
       ? labOptions.find((o) => o.name.includes(`${labNum}호`))
       : null;
 
+    const parsed: ParsedProposal = {
+      ...EMPTY_PARSED,
+      labName: suggestedLabName,
+      location: matchedLab?.siteAddress ?? null,
+    };
+
     return {
       documentId,
       fileName,
@@ -84,6 +127,9 @@ async function buildFallbackRegistration(
       labOptions,
       question:
         "이 제안서를 신규 부동산랩으로 등록할까요, 아니면 기존 목록에 반영할까요?",
+      parsed,
+      extractionSource: "regex",
+      extractionWarning: "상세 조건은 Gemini 보강이 필요합니다.",
     };
   } catch {
     return null;
@@ -108,14 +154,22 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [queue, setQueue] = useState<DocumentRecord[]>([]);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
-  const [registration, setRegistration] = useState<ProposalRegistrationPrompt | null>(null);
+  const [registrations, setRegistrations] = useState<ProposalRegistrationPrompt[]>([]);
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [regSaving, setRegSaving] = useState(false);
+  const [enriching, setEnriching] = useState(false);
 
-  const openRegistration = useCallback((pendingReg: ProposalRegistrationPrompt) => {
-    persistRegistration(pendingReg);
-    setRegistration(pendingReg);
-    requestAnimationFrame(() => {
-      document.getElementById("proposal-registration")?.scrollIntoView({ behavior: "smooth" });
+  const registration =
+    registrations.find((r) => r.documentId === activeDocumentId) ??
+    registrations[0] ??
+    null;
+
+  const setRegs = useCallback((next: ProposalRegistrationPrompt[]) => {
+    persistRegistrations(next);
+    setRegistrations(next);
+    setActiveDocumentId((prev) => {
+      if (prev && next.some((r) => r.documentId === prev)) return prev;
+      return next[0]?.documentId ?? null;
     });
   }, []);
 
@@ -139,20 +193,50 @@ export default function UploadPage() {
     try {
       const raw = sessionStorage.getItem(REG_STORAGE_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as ProposalRegistrationPrompt;
-      if (saved?.documentId && Array.isArray(saved.labOptions)) {
-        setRegistration(saved);
+      const saved = JSON.parse(raw) as ProposalRegistrationPrompt[];
+      if (Array.isArray(saved) && saved.length && saved.every((s) => s?.documentId && s.parsed)) {
+        setRegistrations(saved);
+        setActiveDocumentId(saved[0].documentId);
       }
     } catch {
       /* ignore */
     }
   }, [refresh]);
 
+  async function enrichRegistrations(regs: ProposalRegistrationPrompt[]) {
+    if (regs.length === 0) return;
+    setEnriching(true);
+    try {
+      const res = await fetch("/api/upload/enrich-proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentIds: regs.map((r) => r.documentId) }),
+      });
+      const data = (await res.json()) as {
+        registrations?: ProposalRegistrationPrompt[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setLastFeedback(data.error ?? "조건 보강 실패");
+        return;
+      }
+      if (data.registrations?.length) {
+        setRegs(upsertRegistrations(regs, data.registrations));
+      }
+    } catch (err) {
+      setLastFeedback(
+        err instanceof Error ? err.message : "조건 보강 중 오류가 발생했습니다."
+      );
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   async function handleUpload(files: File[]) {
     setUploading(true);
     setLastFeedback(null);
     try {
-      let openedReg = false;
+      const collected: ProposalRegistrationPrompt[] = [];
 
       for (const file of files) {
         const form = new FormData();
@@ -191,9 +275,7 @@ export default function UploadPage() {
         }
 
         if (reg) {
-          openRegistration(reg);
-          openedReg = true;
-          setLastFeedback(null);
+          collected.push(reg);
         } else if (looksProposal) {
           setLastFeedback(
             `${file.name}: 제안서로 인식했지만 선택 화면을 열지 못했습니다. 문서 유형을 「제안서」로 선택 후 다시 업로드해 주세요.`
@@ -202,9 +284,24 @@ export default function UploadPage() {
           setLastFeedback(`${file.name}: ${(data.message ?? "업로드 완료").split("\n")[0]}`);
         }
 
-        if (!openedReg && docType === "management_status") {
+        if (collected.length === 0 && docType === "management_status") {
           router.push("/management");
         }
+      }
+
+      if (collected.length) {
+        const merged = upsertRegistrations(registrations, collected);
+        setRegs(merged);
+        setLastFeedback(
+          collected.length > 1
+            ? `${collected.length}건 제안서 업로드 · 조건 비교표를 확인하세요.`
+            : null
+        );
+        // 복수(또는 단건) 업로드 후 Gemini로 조건 보강 → 표 품질 확보
+        void enrichRegistrations(merged);
+        requestAnimationFrame(() => {
+          document.getElementById("proposal-conditions")?.scrollIntoView({ behavior: "smooth" });
+        });
       }
 
       void refresh();
@@ -254,17 +351,26 @@ export default function UploadPage() {
         setLastFeedback(data.error ?? "등록 실패");
         return;
       }
+
+      const remaining = registrations.filter(
+        (r) => r.documentId !== registration.documentId
+      );
+      setRegs(remaining);
+
       setLastFeedback(
         [
           data.message,
           ...(data.applied ?? []).map((a: string) => `· ${a}`),
-          "전체현황에서 확인할 수 있습니다.",
+          remaining.length
+            ? `남은 제안서 ${remaining.length}건 — 아래에서 이어서 등록하세요.`
+            : "전체현황에서 확인할 수 있습니다.",
         ].join("\n")
       );
-      persistRegistration(null);
-      setRegistration(null);
+
+      if (remaining.length === 0) {
+        router.push("/management");
+      }
       void refresh();
-      router.push("/management");
     } finally {
       setRegSaving(false);
     }
@@ -274,25 +380,47 @@ export default function UploadPage() {
     <RequireAdmin>
       <AppShell title="관리자 · 문서 업로드">
         <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-2">
-          <div className="space-y-6">
+          <div className="space-y-6 lg:col-span-2">
             <p className="text-sm text-muted">
-              제안서 PDF 업로드 → <strong>아래에서 신규/기존 선택</strong> → 「저장하고 전체현황에
-              반영」을 눌러야 데이터가 바뀝니다. 업로드만으로는 반영되지 않습니다.
+              제안서 PDF 업로드 → <strong>조건 비교표 확인</strong> → 아래에서 신규/기존 선택 →
+              「저장하고 전체현황에 반영」. 여러 건을 올리면 조건을 표로 비교·CSV로 받을 수 있습니다.
             </p>
 
-            {registration ? (
-              <ProposalRegistrationPanel
-                registration={registration}
-                saving={regSaving}
-                onClose={() => {
-                  persistRegistration(null);
-                  setRegistration(null);
-                }}
-                onConfirm={confirmRegistration}
-              />
+            {registrations.length > 0 ? (
+              <div id="proposal-conditions" className="space-y-4">
+                <ProposalConditionsTable
+                  registrations={registrations}
+                  enriching={enriching || uploading}
+                  onEnrich={() => void enrichRegistrations(registrations)}
+                  selectedDocumentId={activeDocumentId}
+                  onSelect={setActiveDocumentId}
+                />
+                {registration ? (
+                  <ProposalRegistrationPanel
+                    registration={registration}
+                    saving={regSaving}
+                    onClose={() => {
+                      const remaining = registrations.filter(
+                        (r) => r.documentId !== registration.documentId
+                      );
+                      setRegs(remaining);
+                    }}
+                    onConfirm={confirmRegistration}
+                  />
+                ) : null}
+                {registrations.length > 1 ? (
+                  <p className="text-xs text-muted">
+                    표에서 열을 클릭하면 해당 제안서의 등록 패널로 전환됩니다. (
+                    {registrations.findIndex((r) => r.documentId === registration?.documentId) + 1}
+                    /{registrations.length})
+                  </p>
+                ) : null}
+              </div>
             ) : null}
+          </div>
 
-            <UploadDropzone onUpload={handleUpload} uploading={uploading} />
+          <div className="space-y-6">
+            <UploadDropzone onUpload={handleUpload} uploading={uploading || enriching} />
 
             <div>
               <p className="mb-2 text-sm font-medium">문서 유형</p>

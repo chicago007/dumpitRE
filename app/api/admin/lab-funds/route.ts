@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   }
 
   const format = req.nextUrl.searchParams.get("format");
-  const portfolio = getLabPortfolio();
+  const portfolio = await getLabPortfolio();
   if (format === "xlsx") {
     const funds = portfolio?.funds ?? [];
     const buf = buildLabStatusExcelBuffer(funds);
@@ -124,7 +124,7 @@ export async function PUT(req: NextRequest) {
     patch.interestPayments = normalizeInterestPayments(entries);
   }
 
-  const fund = updateLabFund(fundId, patch);
+  const fund = await updateLabFund(fundId, patch);
   if (!fund) {
     return NextResponse.json({ error: "랩을 찾을 수 없습니다." }, { status: 404 });
   }
@@ -142,7 +142,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const removed = deleteLabFundById(id);
+  const removed = await deleteLabFundById(id);
   if (!removed) {
     return NextResponse.json({ error: "랩을 찾을 수 없습니다." }, { status: 404 });
   }

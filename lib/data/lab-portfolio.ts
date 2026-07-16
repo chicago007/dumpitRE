@@ -5,6 +5,16 @@ import {
   rememberDeletedMaster,
   restoreDeletedMaster,
 } from "@/lib/data/deleted-masters";
+import {
+  isLabPortfolioDbConfigured,
+  sbDeleteLabFund,
+  sbGetLabPortfolio,
+  sbListAllLabFundsRaw,
+  sbRememberDeletedName,
+  sbReplaceLabPortfolio,
+  sbRestoreDeletedName,
+  sbUpsertLabFund,
+} from "@/lib/data/supabase-lab-portfolio";
 import { normalizeRateValue } from "@/lib/lab/portfolio-ui";
 import type { LabFund, LabInterestPayment, LabPortfolioSnapshot } from "@/lib/types";
 
@@ -35,7 +45,7 @@ function persistSnapshot() {
   }
 }
 
-function commit(funds: LabFund[], fileName?: string): LabPortfolioSnapshot {
+function commitLocal(funds: LabFund[], fileName?: string): LabPortfolioSnapshot {
   snapshot = {
     uploadedAt: new Date().toISOString(),
     fileName: fileName ?? snapshot?.fileName ?? "수동 편집",
@@ -81,7 +91,7 @@ function persistDeletedLabs(set: Set<string>) {
   }
 }
 
-function rememberDeletedLab(labName: string) {
+function rememberDeletedLabLocal(labName: string) {
   const set = loadDeletedLabs();
   const key = norm(labName);
   if (!key || set.has(key)) return;
@@ -95,18 +105,24 @@ export function isLabDeleted(labName: string | null | undefined): boolean {
   return Boolean(key && loadDeletedLabs().has(key));
 }
 
-/** 제안서/상품 재등록 시 삭제 목록에서 복구 */
-export function restoreDeletedLab(
+export async function restoreDeletedLab(
   labName: string,
   extras?: { siteAddress?: string | null; siteName?: string | null }
 ) {
+  if (isLabPortfolioDbConfigured()) {
+    try {
+      await sbRestoreDeletedName(labName);
+    } catch (err) {
+      console.warn("[lab-portfolio] supabase restore deleted failed:", err);
+    }
+  }
+
   const set = loadDeletedLabs();
   const key = norm(labName);
   if (key && set.has(key)) {
     set.delete(key);
     persistDeletedLabs(set);
   } else {
-    // 파일은 이미 비워진 경우에도 메모리 캐시를 파일과 동기화
     try {
       if (fs.existsSync(DELETED_LABS_PATH)) {
         const raw = JSON.parse(fs.readFileSync(DELETED_LABS_PATH, "utf8")) as string[];
@@ -139,7 +155,6 @@ function trySeedFromSample() {
     if (fs.existsSync(PERSIST_PATH)) {
       const raw = JSON.parse(fs.readFileSync(PERSIST_PATH, "utf8")) as LabPortfolioSnapshot;
       if (raw?.funds?.length) {
-        // 삭제 필터는 get 시점에만 적용 (재등록 복구를 위해 원본 유지)
         snapshot = { ...raw, funds: raw.funds, stats: recomputeStats(raw.funds) };
         return;
       }
@@ -182,8 +197,169 @@ function normalizeFund(f: LabFund): LabFund {
   };
 }
 
-/** 제안서에서 추출한 조건으로 랩 현황(마스터)에 신규/갱신 */
-export function upsertLabFundFromProposal(input: {
+function getLocalPortfolio(): LabPortfolioSnapshot | null {
+  trySeedFromSample();
+  if (!snapshot) return null;
+  const funds = applyDeletedFilter(snapshot.funds).map(normalizeFund);
+  return {
+    ...snapshot,
+    funds,
+    stats: recomputeStats(funds),
+  };
+}
+
+/** 로컬 `.data` 파일 원본 (이관용) */
+export function readLocalLabPortfolioFile(): LabPortfolioSnapshot | null {
+  try {
+    if (!fs.existsSync(PERSIST_PATH)) return null;
+    const raw = JSON.parse(fs.readFileSync(PERSIST_PATH, "utf8")) as LabPortfolioSnapshot;
+    if (!raw?.funds?.length) return null;
+    return {
+      ...raw,
+      funds: raw.funds.map(normalizeFund),
+      stats: recomputeStats(raw.funds),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getLabPortfolio(): Promise<LabPortfolioSnapshot | null> {
+  if (isLabPortfolioDbConfigured()) {
+    try {
+      const fromDb = await sbGetLabPortfolio();
+      if (fromDb && fromDb.funds.length > 0) {
+        snapshot = fromDb;
+        return {
+          ...fromDb,
+          funds: fromDb.funds.map(normalizeFund),
+          stats: recomputeStats(fromDb.funds),
+        };
+      }
+    } catch (err) {
+      console.warn("[lab-portfolio] supabase get failed, using local:", err);
+    }
+  }
+  return getLocalPortfolio();
+}
+
+export async function setLabPortfolio(
+  next: LabPortfolioSnapshot
+): Promise<LabPortfolioSnapshot> {
+  const funds = applyDeletedFilter(next.funds).map(normalizeFund);
+  const committed: LabPortfolioSnapshot = {
+    uploadedAt: next.uploadedAt || new Date().toISOString(),
+    fileName: next.fileName || "수동 편집",
+    funds,
+    stats: recomputeStats(funds),
+  };
+
+  if (isLabPortfolioDbConfigured()) {
+    try {
+      const saved = await sbReplaceLabPortfolio(committed);
+      snapshot = saved;
+      persistSnapshot();
+      return saved;
+    } catch (err) {
+      console.warn("[lab-portfolio] supabase set failed, using local:", err);
+    }
+  }
+
+  snapshot = committed;
+  persistSnapshot();
+  return committed;
+}
+
+export async function updateLabFund(
+  fundId: string,
+  patch: Partial<LabFund>
+): Promise<LabFund | null> {
+  const portfolio = await getLabPortfolio();
+  if (!portfolio) return null;
+  const idx = portfolio.funds.findIndex((f) => f.id === fundId);
+  if (idx < 0) return null;
+
+  const prev = portfolio.funds[idx];
+  const next: LabFund = normalizeFund({
+    ...prev,
+    ...patch,
+    id: prev.id,
+    interestPayments: patch.interestPayments ?? prev.interestPayments ?? [],
+  });
+
+  if (patch.balance !== undefined || patch.repaymentDate !== undefined) {
+    if (next.repaymentDate || (next.balance != null && next.balance <= 0)) {
+      next.status = "repaid";
+    } else if (next.status === "repaid" && (next.balance == null || next.balance > 0)) {
+      next.status = "active";
+    }
+  }
+
+  if (isLabPortfolioDbConfigured()) {
+    try {
+      await sbUpsertLabFund(next);
+      const funds = [...portfolio.funds];
+      funds[idx] = next;
+      snapshot = {
+        ...portfolio,
+        funds,
+        stats: recomputeStats(funds),
+        uploadedAt: new Date().toISOString(),
+      };
+      persistSnapshot();
+      return next;
+    } catch (err) {
+      console.warn("[lab-portfolio] supabase update failed, using local:", err);
+    }
+  }
+
+  trySeedFromSample();
+  if (!snapshot) return null;
+  const localIdx = snapshot.funds.findIndex((f) => f.id === fundId);
+  if (localIdx < 0) return null;
+  const funds = [...snapshot.funds];
+  funds[localIdx] = next;
+  commitLocal(funds);
+  return next;
+}
+
+export async function updateLabFundProgressComment(
+  fundId: string,
+  progressComment: string
+): Promise<LabFund | null> {
+  return updateLabFund(fundId, { progressComment: progressComment.trim() || null });
+}
+
+export async function deleteLabFundById(fundId: string): Promise<LabFund | null> {
+  if (isLabPortfolioDbConfigured()) {
+    try {
+      const removed = await sbDeleteLabFund(fundId);
+      if (removed) {
+        await sbRememberDeletedName(removed.name);
+        rememberDeletedMaster({ labName: removed.name });
+        rememberDeletedLabLocal(removed.name);
+        const portfolio = await sbGetLabPortfolio();
+        snapshot = portfolio;
+        if (portfolio) persistSnapshot();
+        return removed;
+      }
+    } catch (err) {
+      console.warn("[lab-portfolio] supabase delete failed, using local:", err);
+    }
+  }
+
+  trySeedFromSample();
+  if (!snapshot) return null;
+  const idx = snapshot.funds.findIndex((f) => f.id === fundId);
+  if (idx < 0) return null;
+  const removed = snapshot.funds[idx];
+  const funds = snapshot.funds.filter((f) => f.id !== fundId);
+  rememberDeletedLabLocal(removed.name);
+  commitLocal(funds);
+  return removed;
+}
+
+export async function upsertLabFundFromProposal(input: {
   labName: string;
   fundName?: string | null;
   siteAddress?: string | null;
@@ -205,15 +381,19 @@ export function upsertLabFundFromProposal(input: {
   totalFloorArea?: string | null;
   buildingScale?: string | null;
   householdCount?: string | null;
-}): LabFund {
-  trySeedFromSample();
-  // 예전에 삭제됐던 랩을 다시 등록하면 삭제 이력을 해제해야 사업장관리에 보임
-  restoreDeletedLab(input.labName, {
+}): Promise<LabFund> {
+  await restoreDeletedLab(input.labName, {
     siteAddress: input.siteAddress,
     siteName: input.businessDesc,
   });
 
-  const funds = snapshot ? [...snapshot.funds] : [];
+  const portfolio = (await getLabPortfolio()) ?? {
+    uploadedAt: new Date().toISOString(),
+    fileName: "제안서 반영",
+    funds: [],
+    stats: recomputeStats([]),
+  };
+  const funds = [...portfolio.funds];
   const labNum = input.labName.match(/(\d{1,3})\s*호/)?.[1] ?? null;
   const idx = funds.findIndex((f) => {
     if (norm(f.name) === norm(input.labName) || f.name === input.labName) return true;
@@ -294,92 +474,29 @@ export function upsertLabFundFromProposal(input: {
     );
   }
 
-  commit(funds, snapshot?.fileName ?? "제안서 반영");
-  return funds[idx >= 0 ? idx : funds.length - 1];
-}
-
-export function getLabPortfolio(): LabPortfolioSnapshot | null {
-  trySeedFromSample();
-  if (!snapshot) return null;
-  const funds = applyDeletedFilter(snapshot.funds).map(normalizeFund);
-  return {
-    ...snapshot,
+  const saved = await setLabPortfolio({
+    ...portfolio,
+    fileName: portfolio.fileName || "제안서 반영",
     funds,
-    stats: recomputeStats(funds),
-  };
+  });
+  return funds[idx >= 0 ? idx : funds.length - 1] ?? saved.funds[saved.funds.length - 1];
 }
 
-export function setLabPortfolio(next: LabPortfolioSnapshot): LabPortfolioSnapshot {
-  const funds = applyDeletedFilter(next.funds);
-  return commit(funds, next.fileName);
-}
-
-export function updateLabFundProgressComment(
-  fundId: string,
-  progressComment: string
-): LabFund | null {
-  return updateLabFund(fundId, { progressComment: progressComment.trim() || null });
-}
-
-export function updateLabFund(
-  fundId: string,
-  patch: Partial<LabFund>
-): LabFund | null {
-  trySeedFromSample();
-  if (!snapshot) return null;
-  const idx = snapshot.funds.findIndex((f) => f.id === fundId);
-  if (idx < 0) return null;
-
-  const prev = snapshot.funds[idx];
-  const next: LabFund = {
-    ...prev,
-    ...patch,
-    id: prev.id,
-    interestPayments: patch.interestPayments ?? prev.interestPayments ?? [],
-  };
-
-  if (patch.balance !== undefined || patch.repaymentDate !== undefined) {
-    if (next.repaymentDate || (next.balance != null && next.balance <= 0)) {
-      next.status = "repaid";
-    } else if (next.status === "repaid" && (next.balance == null || next.balance > 0)) {
-      next.status = "active";
-    }
-  }
-
-  const funds = [...snapshot.funds];
-  funds[idx] = next;
-  commit(funds);
-  return next;
-}
-
-export function deleteLabFundById(fundId: string): LabFund | null {
-  trySeedFromSample();
-  if (!snapshot) return null;
-  const idx = snapshot.funds.findIndex((f) => f.id === fundId);
-  if (idx < 0) return null;
-  const removed = snapshot.funds[idx];
-  const funds = snapshot.funds.filter((f) => f.id !== fundId);
-  rememberDeletedLab(removed.name);
-  commit(funds);
-  return removed;
-}
-
-/** 상품/사업장 삭제 시 전체현황에서도 제거 */
-export function removeLabFundsMatching(criteria: {
+export async function removeLabFundsMatching(criteria: {
   labName?: string | null;
   fundName?: string | null;
   siteAddress?: string | null;
   siteName?: string | null;
-}): { removed: number; names: string[] } {
-  trySeedFromSample();
-  if (!snapshot) return { removed: 0, names: [] };
+}): Promise<{ removed: number; names: string[] }> {
+  const portfolio = await getLabPortfolio();
+  if (!portfolio) return { removed: 0, names: [] };
 
   const lab = norm(criteria.labName);
   const fund = norm(criteria.fundName);
   const siteName = norm(criteria.siteName);
   const names: string[] = [];
 
-  const funds = snapshot.funds.filter((f) => {
+  const funds = portfolio.funds.filter((f) => {
     const hit =
       (lab && norm(f.name) === lab) ||
       (lab && lab.length >= 4 && norm(f.name).includes(lab)) ||
@@ -396,9 +513,74 @@ export function removeLabFundsMatching(criteria: {
 
   if (names.length === 0) return { removed: 0, names: [] };
 
-  for (const n of names) rememberDeletedLab(n);
-  commit(funds, snapshot.fileName ?? "삭제 반영");
+  for (const n of names) {
+    rememberDeletedLabLocal(n);
+    if (isLabPortfolioDbConfigured()) {
+      try {
+        await sbRememberDeletedName(n);
+      } catch (err) {
+        console.warn("[lab-portfolio] supabase remember deleted failed:", err);
+      }
+    }
+  }
+
+  await setLabPortfolio({
+    ...portfolio,
+    fileName: portfolio.fileName ?? "삭제 반영",
+    funds,
+  });
   return { removed: names.length, names };
+}
+
+/** 로컬 `.data` → Supabase 일괄 이관 */
+export async function migrateLocalPortfolioToSupabase(): Promise<{
+  ok: boolean;
+  count: number;
+  fileName: string;
+  message: string;
+}> {
+  if (!isLabPortfolioDbConfigured()) {
+    return {
+      ok: false,
+      count: 0,
+      fileName: "",
+      message: "Supabase가 설정되지 않았습니다.",
+    };
+  }
+
+  const local = readLocalLabPortfolioFile();
+  if (!local?.funds.length) {
+    return {
+      ok: false,
+      count: 0,
+      fileName: "",
+      message: "로컬 .data/lab-portfolio.json 이 없거나 비어 있습니다.",
+    };
+  }
+
+  const deleted = loadDeletedLabs();
+  for (const key of deleted) {
+    await sbRememberDeletedName(key);
+  }
+
+  const saved = await sbReplaceLabPortfolio(local);
+  snapshot = saved;
+  return {
+    ok: true,
+    count: saved.funds.length,
+    fileName: saved.fileName,
+    message: `${saved.funds.length}건을 Supabase로 이관했습니다.`,
+  };
+}
+
+export async function countSupabaseLabFunds(): Promise<number> {
+  if (!isLabPortfolioDbConfigured()) return 0;
+  try {
+    const funds = await sbListAllLabFundsRaw();
+    return funds.length;
+  } catch {
+    return 0;
+  }
 }
 
 export function normalizeInterestPayments(

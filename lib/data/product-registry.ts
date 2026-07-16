@@ -8,11 +8,11 @@ import {
   rememberDeletedMaster,
 } from "@/lib/data/deleted-masters";
 import { extractLabNumber } from "@/lib/analyzers/proposal";
-import type { ProductMaster } from "@/lib/types";
+import type { LabPortfolioSnapshot, ProductMaster } from "@/lib/types";
 
 let products: ProductMaster[] | null = null;
 
-function seedProducts(): ProductMaster[] {
+function seedProducts(portfolio: LabPortfolioSnapshot | null): ProductMaster[] {
   const fromSites: ProductMaster[] = sites
     .filter((s) => !isSiteDeleted(s.id) && !isProductDeleted(`prod-${s.id}`))
     .map((s) => ({
@@ -37,7 +37,6 @@ function seedProducts(): ProductMaster[] {
   }
 
   const fromLabs: ProductMaster[] = [];
-  const portfolio = getLabPortfolio();
   if (portfolio) {
     for (const f of portfolio.funds) {
       if (!f.siteAddress && !f.name) continue;
@@ -70,8 +69,15 @@ function seedProducts(): ProductMaster[] {
   return [...fromSites, ...fromLabs];
 }
 
-function ensure(): ProductMaster[] {
-  if (!products) products = seedProducts();
+export function invalidateProductCache() {
+  products = null;
+}
+
+async function ensure(): Promise<ProductMaster[]> {
+  if (!products) {
+    const portfolio = await getLabPortfolio();
+    products = seedProducts(portfolio);
+  }
   return products;
 }
 
@@ -90,8 +96,8 @@ function resolveHasProposal(p: ProductMaster): boolean {
   });
 }
 
-export function listProducts(): ProductMaster[] {
-  return [...ensure()]
+export async function listProducts(): Promise<ProductMaster[]> {
+  return [...(await ensure())]
     .map((p) => ({ ...p, hasProposal: resolveHasProposal(p) }))
     .sort((a, b) => {
       const aMissing = !a.labName?.trim() || !a.fundName?.trim() ? 0 : 1;
@@ -106,14 +112,14 @@ export function listProducts(): ProductMaster[] {
     });
 }
 
-export function getProduct(id: string): ProductMaster | null {
-  return ensure().find((p) => p.id === id) ?? null;
+export async function getProduct(id: string): Promise<ProductMaster | null> {
+  return (await ensure()).find((p) => p.id === id) ?? null;
 }
 
-export function upsertProduct(
+export async function upsertProduct(
   input: Omit<ProductMaster, "id" | "createdAt" | "updatedAt"> & { id?: string }
-): ProductMaster {
-  const list = ensure();
+): Promise<ProductMaster> {
+  const list = await ensure();
   const now = new Date().toISOString();
   if (input.id) {
     const idx = list.findIndex((p) => p.id === input.id);
@@ -144,8 +150,8 @@ export function upsertProduct(
   return created;
 }
 
-export function deleteProduct(id: string): ProductMaster | null {
-  const list = ensure();
+export async function deleteProduct(id: string): Promise<ProductMaster | null> {
+  const list = await ensure();
   const idx = list.findIndex((p) => p.id === id);
   if (idx < 0) return null;
   const [removed] = list.splice(idx, 1);
@@ -160,17 +166,18 @@ export function deleteProduct(id: string): ProductMaster | null {
 }
 
 /** Match by address / aliases / site name / lab / fund keywords */
-export function matchProduct(query: {
+export async function matchProduct(query: {
   siteName?: string | null;
   fundName?: string | null;
   location?: string | null;
   fileName?: string | null;
   labName?: string | null;
-}): ProductMaster | null {
+}): Promise<ProductMaster | null> {
   // 랩 번호는 labName/파일명만 사용 (펀드명·aliases의 제N호는 제외)
+  const list = await ensure();
   const labNum = extractLabNumber(query.labName, query.fileName, query.siteName);
   if (labNum) {
-    const byLab = ensure().find(
+    const byLab = list.find(
       (p) => extractLabNumber(p.labName, p.siteName) === labNum
     );
     if (byLab) return byLab;
@@ -190,7 +197,7 @@ export function matchProduct(query: {
   if (!hay.trim()) return null;
 
   let best: { product: ProductMaster; score: number } | null = null;
-  for (const p of ensure()) {
+  for (const p of list) {
     let score = 0;
     const keys = [
       p.labName,

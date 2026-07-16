@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       pdfTextForIndex = pdfText;
 
       if (treatAsProposal) {
-        const { parsed, extractionWarning } = await parseProposalQuick(
+        const { parsed, extractionWarning, extractionSource } = await parseProposalQuick(
           pdfText,
           file.name
         );
@@ -101,10 +101,12 @@ export async function POST(req: NextRequest) {
         analysisStatus = "needs_review";
         docType = "proposal";
         warnings.push("신규/기존 부동산랩을 선택한 뒤 반영해 주세요.");
-        registration = buildProposalRegistrationPrompt({
+        registration = await buildProposalRegistrationPrompt({
           documentId: docId,
           fileName: file.name,
           parsed,
+          extractionSource,
+          extractionWarning,
         });
         siteName = parsed.siteName ?? registration.suggestedLabName;
       } else if (inferredType === "progress_report") {
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
       isLabStatusExcelFile(file.name)
     ) {
       const portfolio = parseLabStatusExcel(buffer, file.name);
-      setLabPortfolio(portfolio);
+      await setLabPortfolio(portfolio);
       siteName = "부동산랩 포트폴리오";
       docType = "management_status";
       analysisStatus = "done";

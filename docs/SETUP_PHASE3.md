@@ -6,6 +6,7 @@
 2. SQL Editor에서 순서대로 실행:
    - `supabase/migrations/001_initial.sql`
    - `supabase/migrations/002_phase3.sql`
+   - `supabase/migrations/003_lab_portfolio.sql`
 3. `.env.local` 설정:
 
 ```env
@@ -60,3 +61,23 @@ Supabase Dashboard → Database → Extensions → `vector` 활성화
 | Supabase만 | DB 영구 저장 |
 | + Gemini | RAG Q&A |
 | + Google Drive | 원본 Drive 저장 |
+
+## 6. 사업장관리(랩 포트폴리오) Supabase 저장
+
+로컬 `.data/lab-portfolio.json` 은 git/Vercel에 포함되지 않습니다.  
+Vercel과 로컬이 같은 데이터를 쓰려면 `lab_funds` 테이블이 필요합니다.
+
+1. SQL Editor에서 `supabase/migrations/003_lab_portfolio.sql` 실행
+2. 로컬 데이터 이관:
+
+```bash
+node --env-file=.env.local scripts/migrate-lab-portfolio.cjs
+```
+
+또는 관리자 로그인 후:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/lab-funds/migrate
+```
+
+이후 업로드/사업장관리 저장은 Supabase에 기록되며 Vercel에서도 동일하게 보입니다.

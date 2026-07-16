@@ -28,13 +28,16 @@ export function shouldTreatAsProposal(
   return false;
 }
 
-export function buildProposalRegistrationPrompt(input: {
+export async function buildProposalRegistrationPrompt(input: {
   documentId: string;
   fileName: string;
   parsed: ParsedProposal;
-}): ProposalRegistrationPrompt {
-  const { documentId, fileName, parsed } = input;
-  const product = matchProduct({
+  extractionSource?: "gemini" | "regex";
+  extractionWarning?: string | null;
+}): Promise<ProposalRegistrationPrompt> {
+  const { documentId, fileName, parsed, extractionSource, extractionWarning } =
+    input;
+  const product = await matchProduct({
     siteName: parsed.siteName,
     fundName: parsed.fundName,
     location: parsed.location,
@@ -42,7 +45,7 @@ export function buildProposalRegistrationPrompt(input: {
     labName: parsed.labName,
   });
 
-  const portfolio = getLabPortfolio();
+  const portfolio = await getLabPortfolio();
   const labOptions = (portfolio?.funds ?? [])
     .filter((f) => f.name?.trim())
     .map((f) => ({
@@ -87,5 +90,8 @@ export function buildProposalRegistrationPrompt(input: {
     labOptions,
     question:
       "이 제안서를 신규 부동산랩으로 등록할까요, 아니면 기존 목록에 반영할까요?",
+    parsed: { ...parsed },
+    extractionSource: extractionSource ?? "regex",
+    extractionWarning: extractionWarning ?? null,
   };
 }

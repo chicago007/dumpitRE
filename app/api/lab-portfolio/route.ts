@@ -6,7 +6,7 @@ import {
 } from "@/lib/data/lab-portfolio";
 
 export async function GET() {
-  const portfolio = getLabPortfolio();
+  const portfolio = await getLabPortfolio();
   return NextResponse.json(portfolio, {
     headers: { "Cache-Control": "no-store" },
   });
@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "fundId required" }, { status: 400 });
   }
 
-  const fund = updateLabFundProgressComment(fundId, progressComment);
+  const fund = await updateLabFundProgressComment(fundId, progressComment);
   if (!fund) {
     return NextResponse.json({ error: "랩을 찾을 수 없습니다." }, { status: 404 });
   }

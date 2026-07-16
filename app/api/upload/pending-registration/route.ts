@@ -15,10 +15,11 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    registration: buildProposalRegistrationPrompt({
+    registration: await buildProposalRegistrationPrompt({
       documentId: pending.documentId,
       fileName: pending.fileName,
       parsed: pending.parsed,
+      extractionSource: "regex",
     }),
   });
 }

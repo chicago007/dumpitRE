@@ -22,7 +22,7 @@ import {
 import { stripTemplatePollution, masterAddressIsTrustworthy } from "@/lib/analyzers/proposal-sanitize";
 
 export async function GET() {
-  return NextResponse.json(listProducts());
+  return NextResponse.json(await listProducts());
 }
 
 export async function POST(req: NextRequest) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   // 기존 부동산랩 선택 시 목록 기준으로 식별
   if (!isNewSite && labFundId) {
-    const fund = getLabPortfolio()?.funds.find((f) => f.id === labFundId);
+    const fund = (await getLabPortfolio())?.funds.find((f) => f.id === labFundId);
     if (!fund) {
       return NextResponse.json(
         { error: "선택한 부동산랩을 찾을 수 없습니다." },
@@ -99,7 +99,6 @@ export async function POST(req: NextRequest) {
           {
             ...enriched,
             labName: labName || enriched.labName,
-            // 기존 랩: 펀드명은 PDF/Gemini 값 무시. 주소는 마스터에 있을 때만 유지
             fundName: isNewSite ? enriched.fundName : fundName,
             location: isNewSite
               ? enriched.location
@@ -118,16 +117,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (parsed) {
+    const products = await listProducts();
     const existing =
-      (body.id ? getProduct(String(body.id)) : null) ??
-      listProducts().find(
+      (body.id ? await getProduct(String(body.id)) : null) ??
+      products.find(
         (p) =>
           p.labName &&
           labName &&
           p.labName.replace(/\s+/g, "") === labName.replace(/\s+/g, "")
       ) ??
       null;
-    const master = applyProposalMasterData(
+    const master = await applyProposalMasterData(
       {
         ...parsed,
         location: isNewSite
@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 수기 등록만 한 경우에도 전체현황(랩 목록)에 반드시 반영
-  let product = upsertProduct({
+  let product = await upsertProduct({
     id: body.id,
     labName,
     fundName,
@@ -171,10 +171,10 @@ export async function POST(req: NextRequest) {
 
   if (isNewSite || !product.siteId) {
     const siteId = ensureSiteForProduct(product);
-    product = upsertProduct({ ...product, siteId, hasProposal: true });
+    product = await upsertProduct({ ...product, siteId, hasProposal: true });
   }
 
-  const fund = upsertLabFundFromProposal({
+  const fund = await upsertLabFundFromProposal({
     labName: product.labName || product.siteName || "신규랩",
     fundName: product.fundName,
     siteAddress: product.siteAddress,
@@ -198,10 +198,10 @@ export async function DELETE(req: NextRequest) {
   const siteAddress = req.nextUrl.searchParams.get("siteAddress");
 
   if (id) {
-    const removed = deleteProduct(id);
+    const removed = await deleteProduct(id);
     if (!removed) return NextResponse.json({ ok: false, error: "not found" }, { status: 404 });
 
-    const labRemoval = removeLabFundsMatching({
+    const labRemoval = await removeLabFundsMatching({
       labName: removed.labName,
       fundName: removed.fundName,
       siteAddress: removed.siteAddress,
@@ -219,9 +219,8 @@ export async function DELETE(req: NextRequest) {
     });
   }
 
-  // 상품은 이미 지웠고 전체현황만 남은 경우
   if (labName || siteName || siteAddress) {
-    const labRemoval = removeLabFundsMatching({ labName, siteName, siteAddress });
+    const labRemoval = await removeLabFundsMatching({ labName, siteName, siteAddress });
     return NextResponse.json({
       ok: true,
       labPortfolio: labRemoval,
