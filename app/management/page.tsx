@@ -176,7 +176,7 @@ export default function ManagementOverviewPage() {
                               {f.name}
                             </Link>
                             <p className="text-xs text-muted">
-                              {[f.fundName, f.fundCode].filter(Boolean).join(" · ") || "—"}
+                              {f.fundName || "—"}
                             </p>
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3">

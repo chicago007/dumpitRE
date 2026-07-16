@@ -37,6 +37,8 @@ import { FundStatusHoverBubble } from "@/components/management/fund-status-toolt
 
 type EntityTab = "trustCompany" | "developer" | "contractor" | "purchaseAgency";
 
+const CURRENT_YEAR = String(new Date().getFullYear());
+
 const ENTITY_TABS: { id: EntityTab; label: string }[] = [
   { id: "trustCompany", label: "신탁사" },
   { id: "developer", label: "시행사" },
@@ -735,7 +737,7 @@ function FeeTrendChart({
 
 export function SetupRepaymentPanel({ funds }: { funds: LabFund[] }) {
   const [periodMode, setPeriodMode] = useState<PeriodMode>("month");
-  const [year, setYear] = useState<string | null>(null);
+  const [year, setYear] = useState<string | null>(CURRENT_YEAR);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const allRows = useMemo(
     () => aggregateSetupRepayment(funds, periodMode),
@@ -762,7 +764,7 @@ export function SetupRepaymentPanel({ funds }: { funds: LabFund[] }) {
           onModeChange={(mode) => {
             setPeriodMode(mode);
             setSelectedKey(null);
-            if (mode === "year") setYear(null);
+            setYear(mode === "month" ? CURRENT_YEAR : null);
           }}
           years={years}
           year={year}
@@ -813,7 +815,7 @@ export function SetupRepaymentPanel({ funds }: { funds: LabFund[] }) {
 
 export function FeeTrendPanel({ funds }: { funds: LabFund[] }) {
   const [periodMode, setPeriodMode] = useState<PeriodMode>("month");
-  const [year, setYear] = useState<string | null>(null);
+  const [year, setYear] = useState<string | null>(CURRENT_YEAR);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const allRows = useMemo(() => aggregateFeeByPeriod(funds, periodMode), [funds, periodMode]);
   const years = useMemo(() => yearsFromPeriodKeys(allRows), [allRows]);
@@ -834,7 +836,7 @@ export function FeeTrendPanel({ funds }: { funds: LabFund[] }) {
           onModeChange={(mode) => {
             setPeriodMode(mode);
             setSelectedKey(null);
-            if (mode === "year") setYear(null);
+            setYear(mode === "month" ? CURRENT_YEAR : null);
           }}
           years={years}
           year={year}
@@ -962,7 +964,7 @@ export function RegionRankPanel({ funds }: { funds: LabFund[] }) {
 
 export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
   const [periodMode, setPeriodMode] = useState<PeriodMode>("month");
-  const [year, setYear] = useState<string | null>(null);
+  const [year, setYear] = useState<string | null>(CURRENT_YEAR);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const allRows = useMemo(
     () => aggregateMaturityByPeriod(funds, periodMode),
@@ -987,7 +989,7 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
           onModeChange={(mode) => {
             setPeriodMode(mode);
             setSelectedKey(null);
-            if (mode === "year") setYear(null);
+            setYear(mode === "month" ? CURRENT_YEAR : null);
           }}
           years={years}
           year={year}
@@ -1040,7 +1042,7 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
 
 export function InterestSchedulePanel({ funds }: { funds: LabFund[] }) {
   const [periodMode, setPeriodMode] = useState<PeriodMode>("month");
-  const [year, setYear] = useState<string | null>(null);
+  const [year, setYear] = useState<string | null>(CURRENT_YEAR);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const allRows = useMemo(
     () => aggregateInterestByPeriod(funds, periodMode),
@@ -1066,7 +1068,7 @@ export function InterestSchedulePanel({ funds }: { funds: LabFund[] }) {
           onModeChange={(mode) => {
             setPeriodMode(mode);
             setSelectedKey(null);
-            if (mode === "year") setYear(null);
+            setYear(mode === "month" ? CURRENT_YEAR : null);
           }}
           years={years}
           year={year}

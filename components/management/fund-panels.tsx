@@ -268,12 +268,19 @@ export function LabRoundDetail({
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h3 className={cn("font-semibold", compact ? "text-base" : "text-lg")}>
+              <h3
+                className={cn(
+                  "font-semibold text-slate-900",
+                  compact ? "text-base" : "text-lg"
+                )}
+              >
                 {fund.name}
               </h3>
-              <span className="text-xs text-muted">{codeParts.join(" / ")}</span>
+              <span className="text-xs text-slate-500">{codeParts.join(" / ")}</span>
             </div>
-            <p className="mt-1 text-sm text-muted break-words">{placeParts.join(" / ")}</p>
+            <p className="mt-1 text-sm text-slate-700 break-words">
+              {placeParts.join(" / ")}
+            </p>
           </div>
           <FundProgressBadge fund={fund} variant="header" />
         </div>
@@ -282,7 +289,7 @@ export function LabRoundDetail({
 
       <div className={cn("space-y-5", compact ? "p-3" : "p-5")}>
         <div>
-          <h4 className="mb-3 text-sm font-semibold">투자 주요 조건</h4>
+          <h4 className="mb-3 text-sm font-semibold text-slate-800">투자 주요 조건</h4>
           <HorizontalScroll>
             <dl className="grid w-max min-w-full grid-cols-4 gap-3">
               {conditions.map((item) => (
@@ -294,7 +301,7 @@ export function LabRoundDetail({
 
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h4 className="text-sm font-semibold">회차별 이자지급</h4>
+            <h4 className="text-sm font-semibold text-slate-800">회차별 이자지급</h4>
             <span className="text-xs text-muted">{payments.length}회차</span>
           </div>
           {payments.length === 0 ? (
@@ -318,7 +325,7 @@ export function LabRoundDetail({
                     <p
                       className={cn(
                         "mt-1 text-sm tabular-nums",
-                        upcoming ? "font-semibold text-accent" : "text-foreground"
+                        upcoming ? "font-semibold text-[#0d7a7d]" : "text-slate-700"
                       )}
                     >
                       {p.raw ?? p.date}
@@ -334,7 +341,7 @@ export function LabRoundDetail({
 
         <section className="rounded-lg border border-border bg-neutral-50/70 p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h4 className="text-sm font-semibold">진행현황 코멘트</h4>
+            <h4 className="text-sm font-semibold text-slate-800">진행현황 코멘트</h4>
             {canEdit ? (
               <span className="text-[11px] text-muted">관리자 편집</span>
             ) : (
@@ -396,8 +403,8 @@ function Item({ label, value }: { label: string; value: string | null | undefine
   const lines = splitDisplayLines(value);
   return (
     <div className="min-w-[9rem]">
-      <dt className="text-[11px] text-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm tabular-nums">
+      <dt className="text-[11px] font-medium text-[#0d7a7d]">{label}</dt>
+      <dd className="mt-0.5 text-sm text-slate-700 tabular-nums">
         {lines.length === 1 ? (
           <span className="break-words">{lines[0]}</span>
         ) : (

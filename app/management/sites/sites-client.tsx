@@ -141,7 +141,7 @@ export default function ManagementSitesPage() {
                         "mb-0.5 block w-full rounded-md px-1 py-1.5 text-center text-sm tabular-nums whitespace-nowrap transition-colors",
                         active
                           ? "bg-accent font-semibold text-accent-foreground shadow-sm"
-                          : "font-normal text-slate-400 hover:bg-white hover:text-slate-600"
+                          : "font-medium text-slate-600 hover:bg-white hover:text-slate-900"
                       )}
                     >
                       {label}

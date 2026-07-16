@@ -94,20 +94,29 @@ export function formatRate(rate: string | number | null): string {
   if (rate == null || rate === "") return "—";
   // 마스터·엑셀은 %p 그대로 저장 (1.0 = 1.0%, 6.2 = 6.2%)
   if (typeof rate === "string") {
-    const s = rate.trim().replace(/%/g, "");
-    return s ? `${s}%` : "—";
+    const cleaned = canonicalRateInput(rate);
+    return cleaned ? `${cleaned}%` : "—";
   }
   const n = normalizePercentRate(rate);
   if (n == null) return "—";
   return `${n.toFixed(2)}%`;
 }
 
+/** 금리·수수료 최대 소수 자릿수 (그 이상은 부동소수 잔여로 간주) */
+const RATE_MAX_FRAC = 4;
+
 /** 1.799999999 → 1.8 등 부동소수 오차 제거 */
 export function normalizePercentRate(
   n: number | null | undefined
 ): number | null {
   if (n == null || !Number.isFinite(n)) return null;
-  return Math.round(n * 10000) / 10000;
+  return Math.round(n * 10 ** RATE_MAX_FRAC) / 10 ** RATE_MAX_FRAC;
+}
+
+/** 1.8000 → 1.8 (숫자에서 온 값의 trailing zero 제거) */
+function trimRateFixed(fixed: string): string {
+  if (!fixed.includes(".")) return fixed;
+  return fixed.replace(/0+$/, "").replace(/\.$/, "");
 }
 
 export function rateToNumber(
@@ -125,10 +134,11 @@ export function rateToNumber(
 export function rateFromNumber(n: number | null | undefined): string | null {
   const v = normalizePercentRate(n);
   if (v == null) return null;
-  return String(v);
+  // String(1.8)은 보통 안전하지만, 일부 환경/직렬화에서 긴 소수가 생길 수 있어 toFixed 후 trim
+  return trimRateFixed(v.toFixed(RATE_MAX_FRAC));
 }
 
-/** 입력 문자열 → 저장 문자열 (1.0, 7.0 등 trailing zero 유지) */
+/** 입력 문자열 → 저장 문자열 (1.0, 7.0 등 짧은 trailing zero 유지) */
 export function canonicalRateInput(text: string): string | null {
   const s = text.trim().replace(/%/g, "");
   if (!s || s === "-" || s === ".") return null;
@@ -139,6 +149,10 @@ export function canonicalRateInput(text: string): string | null {
   if (dot === -1) return String(Math.trunc(n));
   const fracLen = s.length - dot - 1;
   if (fracLen === 0) return String(Math.trunc(n));
+  // 1.800000000000000 처럼 과도한 소수 → 부동소수 잔여로 보고 정리
+  if (fracLen > RATE_MAX_FRAC) {
+    return trimRateFixed(n.toFixed(RATE_MAX_FRAC));
+  }
   return n.toFixed(fracLen);
 }
 
@@ -156,7 +170,7 @@ export function formatRateInput(
   rate: string | number | null | undefined
 ): string {
   if (rate == null || rate === "") return "";
-  if (typeof rate === "string") return rate;
+  if (typeof rate === "string") return canonicalRateInput(rate) ?? "";
   return rateFromNumber(rate) ?? "";
 }
 
