@@ -1,15 +1,24 @@
 import { cn } from "@/lib/utils";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 
-export interface RatioBarItem {
+interface RatioBarItemBase {
   label: string;
+  barClass?: string;
+}
+
+interface RatioBarItemWithRatio extends RatioBarItemBase {
   numeratorLabel: string;
   denominatorLabel: string;
   numeratorValue: string;
   denominatorValue: string;
   ratio: number;
-  barClass?: string;
 }
+
+interface RatioBarItemWithValue extends RatioBarItemBase {
+  simpleValue: string;
+}
+
+export type RatioBarItem = RatioBarItemWithRatio | RatioBarItemWithValue;
 
 interface RatioBarsProps {
   items: RatioBarItem[];
@@ -23,11 +32,26 @@ export function RatioBars({ items }: RatioBarsProps) {
           className={cn(
             "grid gap-8",
             items.length >= 3
-              ? "min-w-[780px] grid-cols-3"
+              ? "min-w-[700px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px]"
               : "min-w-[520px] grid-cols-2"
           )}
         >
         {items.map((item) => {
+          if ("simpleValue" in item) {
+            const valueClass = (item.barClass ?? "bg-accent").replace("bg-", "text-");
+            return (
+              <div
+                key={item.label}
+                className="flex min-w-0 flex-col items-end justify-center text-right"
+              >
+                <p className="text-xs font-medium text-muted">{item.label}</p>
+                <p className={cn("mt-2 text-xl font-bold tabular-nums", valueClass)}>
+                  {item.simpleValue}
+                </p>
+              </div>
+            );
+          }
+
           const pct = Number.isFinite(item.ratio)
             ? Math.min(100, Math.max(0, item.ratio * 100))
             : 0;
