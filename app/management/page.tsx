@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { FundProgressBadge } from "@/components/management/fund-panels";
+import {
+  filterFundsByStatus,
+  LabStatusFilterTabs,
+  type LabStatusFilter,
+} from "@/components/management/lab-status-filter";
 import { RatioBars } from "@/components/management/ratio-donut";
 import { FundStatusBadge } from "@/components/ui/fund-status-badge";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
@@ -16,8 +21,6 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
 
-type Filter = "all" | "active" | "repaid";
-
 function statusBadge(status: LabFund["status"]) {
   return <FundStatusBadge status={status} />;
 }
@@ -25,7 +28,7 @@ function statusBadge(status: LabFund["status"]) {
 export default function ManagementOverviewPage() {
   const [portfolio, setPortfolio] = useState<LabPortfolioSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<LabStatusFilter>("all");
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -42,38 +45,18 @@ export default function ManagementOverviewPage() {
 
   const funds = useMemo(() => {
     if (!portfolio) return [];
-    const list =
-      filter === "all" ? portfolio.funds : portfolio.funds.filter((f) => f.status === filter);
-    return sortLabFunds(list);
+    return sortLabFunds(filterFundsByStatus(portfolio.funds, filter));
   }, [portfolio, filter]);
 
-  const filterTabs = (
-    <div className="flex gap-1 rounded-lg border border-border bg-card p-1 shadow-card">
-      {(
-        [
-          ["all", "전체"],
-          ["active", "진행중"],
-          ["repaid", "상환"],
-        ] as const
-      ).map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => setFilter(id)}
-          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            filter === id
-              ? "bg-accent font-semibold text-accent-foreground shadow-sm"
-              : "text-muted hover:bg-accent/10 hover:text-foreground"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
-    <AppShell title="전체 현황" action={portfolio ? filterTabs : undefined}>
+    <AppShell
+      title="전체 현황"
+      action={
+        portfolio ? (
+          <LabStatusFilterTabs value={filter} onChange={setFilter} />
+        ) : undefined
+      }
+    >
       <div className="mx-auto max-w-7xl space-y-6">
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
