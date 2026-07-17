@@ -19,7 +19,14 @@ export function RatioBars({ items }: RatioBarsProps) {
   return (
     <div className="shadow-card rounded-xl border border-border bg-card px-5 py-4">
       <HorizontalScroll>
-        <div className="grid min-w-[520px] grid-cols-2 gap-8">
+        <div
+          className={cn(
+            "grid gap-8",
+            items.length >= 3
+              ? "min-w-[780px] grid-cols-3"
+              : "min-w-[520px] grid-cols-2"
+          )}
+        >
         {items.map((item) => {
           const pct = Number.isFinite(item.ratio)
             ? Math.min(100, Math.max(0, item.ratio * 100))

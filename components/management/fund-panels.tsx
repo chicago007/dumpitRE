@@ -35,7 +35,7 @@ export function FundProgressBadge({
     fund.actualProgressPct != null ? `${Math.round(fund.actualProgressPct)}%` : "—";
 
   const repaidLabel = (
-    <span className="im-gradient-text font-extrabold tracking-tight">상환완료</span>
+    <span className="font-extrabold tracking-tight text-im-gray">상환완료</span>
   );
 
   if (variant === "header") {
@@ -44,17 +44,17 @@ export function FundProgressBadge({
         className={cn(
           "flex shrink-0 flex-col items-center justify-center rounded-md border px-2",
           repaid
-            ? "repaid-blink h-16 min-w-[5.5rem] border-im-purple bg-gradient-to-br from-im-purple/30 via-white to-im-lime/25"
+            ? "h-16 min-w-[5.5rem] border-im-lime bg-im-lime/45"
             : "h-16 w-16 border-im-mint/40 bg-gradient-to-br from-im-mint/10 to-white"
         )}
       >
         <span
           className={cn(
             "text-xs font-medium leading-none",
-            repaid ? "font-semibold text-[#6b4fa8]" : "text-im-mint"
+            repaid ? "font-semibold text-im-gray" : "text-im-mint"
           )}
         >
-          {repaid ? "✓ 완료" : "공정율"}
+          {repaid ? "완료" : "공정율"}
         </span>
         <span
           className={cn(
@@ -70,11 +70,8 @@ export function FundProgressBadge({
 
   if (repaid) {
     return (
-      <span className="repaid-blink inline-flex items-center gap-1 rounded-md border border-im-purple bg-im-purple/30 px-2.5 py-1 text-sm shadow-sm">
-        <span className="text-im-mint" aria-hidden>
-          ✓
-        </span>
-        {repaidLabel}
+      <span className="inline-flex items-center rounded-md border border-im-lime bg-im-lime/45 px-2.5 py-1 text-sm font-bold tracking-tight text-im-gray shadow-sm">
+        상환완료
       </span>
     );
   }
@@ -186,6 +183,7 @@ export function LabRoundDetail({
   const [comment, setComment] = useState(fund.progressComment ?? "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
 
   useEffect(() => {
     setComment(fund.progressComment ?? "");
@@ -246,10 +244,12 @@ export function LabRoundDetail({
     { label: "상품코드", value: fund.productCode },
     { label: "펀드코드", value: fund.fundCode },
   ].map(({ label, value }) => value?.trim() || label);
-  const placeParts = [
-    { label: "사업장 주소", value: fund.siteAddress },
-    { label: "사업내용", value: fund.businessDesc },
-  ].map(({ label, value }) => value?.trim() || label);
+  const siteAddress = fund.siteAddress?.trim();
+  const businessDesc = fund.businessDesc?.trim() || "사업내용";
+  const hasMap = Boolean(siteAddress);
+  const mapUrl = siteAddress
+    ? `https://www.google.com/maps?q=${encodeURIComponent(siteAddress)}&output=embed`
+    : "";
 
   return (
     <article
@@ -279,7 +279,20 @@ export function LabRoundDetail({
               <span className="text-xs text-slate-500">{codeParts.join(" / ")}</span>
             </div>
             <p className="mt-1 text-sm text-slate-700 break-words">
-              {placeParts.join(" / ")}
+              {hasMap ? (
+                <button
+                  type="button"
+                  onClick={() => setMapOpen(true)}
+                  className="font-medium text-link underline decoration-dotted underline-offset-2"
+                  title="지도에서 주소 보기"
+                >
+                  {siteAddress}
+                </button>
+              ) : (
+                siteAddress || "사업장 주소"
+              )}
+              {" / "}
+              {businessDesc}
             </p>
           </div>
           <FundProgressBadge fund={fund} variant="header" />
@@ -373,6 +386,42 @@ export function LabRoundDetail({
           )}
         </section>
       </div>
+      {mapOpen && siteAddress ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${fund.name} 사업장 지도`}
+          onClick={() => setMapOpen(false)}
+        >
+          <div
+            className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{fund.name} 사업장</p>
+                <p className="truncate text-xs text-muted">{siteAddress}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMapOpen(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xl text-muted hover:bg-slate-100 hover:text-foreground"
+                aria-label="지도 닫기"
+              >
+                ×
+              </button>
+            </div>
+            <iframe
+              title={`${fund.name} 사업장 지도`}
+              src={mapUrl}
+              className="h-[min(65vh,520px)] w-full border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }

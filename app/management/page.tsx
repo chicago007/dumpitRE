@@ -15,9 +15,11 @@ import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import {
   encodeSiteParam,
   formatRate,
+  rateToNumber,
   siteKey,
   sortLabFunds,
 } from "@/lib/lab/portfolio-ui";
+import { calcFundFeeAmount } from "@/lib/lab/portfolio-analytics";
 import { formatCurrency } from "@/lib/utils";
 import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
 
@@ -47,6 +49,20 @@ export default function ManagementOverviewPage() {
     if (!portfolio) return [];
     return sortLabFunds(filterFundsByStatus(portfolio.funds, filter));
   }, [portfolio, filter]);
+
+  const feeStats = useMemo(() => {
+    if (!portfolio) return { amount: 0, setupAmount: 0 };
+    return portfolio.funds.reduce(
+      (total, fund) => {
+        const setupAmount = fund.setupAmount ?? 0;
+        if (setupAmount <= 0 || rateToNumber(fund.feeRate) == null) return total;
+        total.amount += calcFundFeeAmount(fund);
+        total.setupAmount += setupAmount;
+        return total;
+      },
+      { amount: 0, setupAmount: 0 }
+    );
+  }, [portfolio]);
 
   return (
     <AppShell
@@ -94,6 +110,18 @@ export default function ManagementOverviewPage() {
                       ? portfolio.stats.totalBalance / portfolio.stats.totalSetupAmount
                       : 0,
                   barClass: "bg-success",
+                },
+                {
+                  label: "현재까지 수수료",
+                  numeratorLabel: "누적 수수료",
+                  denominatorLabel: "수수료 산정 설정액",
+                  numeratorValue: formatCurrency(feeStats.amount),
+                  denominatorValue: formatCurrency(feeStats.setupAmount),
+                  ratio:
+                    feeStats.setupAmount > 0
+                      ? feeStats.amount / feeStats.setupAmount
+                      : 0,
+                  barClass: "bg-im-mint",
                 },
               ]}
             />

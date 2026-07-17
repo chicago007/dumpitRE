@@ -188,10 +188,12 @@ export function Sidebar({
     >
       <div className="shrink-0 border-b border-im-beige/50 px-4 py-5">
         <Link href="/management" className="block">
-          <p className="text-base font-semibold tracking-tight text-im-gray">
-            Dumpit <span className="im-gradient-text font-bold">RE</span>
+          <p className="text-xs font-semibold tracking-tight text-im-gray">
+            LH/SH/GH 매입약정
           </p>
-          <p className="text-xs text-sidebar-muted">사업장 관리</p>
+          <p className="im-gradient-text text-lg font-bold tracking-tight">
+            부동산랩 사업장관리
+          </p>
         </Link>
         <div className="im-gradient-bg mt-3 h-1 w-12 rounded-full opacity-80" aria-hidden />
       </div>
