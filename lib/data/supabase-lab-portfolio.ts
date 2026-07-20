@@ -1,5 +1,5 @@
 import { createAdminClient, isSupabaseServerConfigured } from "@/lib/supabase/admin";
-import { normalizeRateValue } from "@/lib/lab/portfolio-ui";
+import { deriveLabFundStatus, normalizeRateValue } from "@/lib/lab/portfolio-ui";
 import type {
   LabFund,
   LabFundStatus,
@@ -98,7 +98,7 @@ export function fundToRow(fund: LabFund): LabFundRow {
 }
 
 export function rowToFund(row: LabFundRow): LabFund {
-  return {
+  const fund: LabFund = {
     id: row.id,
     name: row.name,
     productCode: row.product_code,
@@ -136,6 +136,8 @@ export function rowToFund(row: LabFundRow): LabFund {
       : [],
     status: row.status,
   };
+  fund.status = deriveLabFundStatus(fund);
+  return fund;
 }
 
 function recomputeStats(funds: LabFund[]): LabPortfolioSnapshot["stats"] {

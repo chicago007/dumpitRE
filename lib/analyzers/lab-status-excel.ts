@@ -210,8 +210,14 @@ export function parseLabStatusExcel(
 
     const statusRaw = cellToString(get("status"));
     let status = resolveStatus({ balance, repaymentDate });
+    // 명시 상환은 존중하되, 잔액 0·상환일 있는 건을 엑셀 "진행중"으로 덮어쓰지 않음
     if (statusRaw === "상환" || statusRaw === "repaid") status = "repaid";
-    else if (statusRaw === "진행중" || statusRaw === "active") status = "active";
+    else if (
+      (statusRaw === "진행중" || statusRaw === "active") &&
+      status !== "repaid"
+    ) {
+      status = "active";
+    }
 
     const fund: LabFund = {
       id: `lab-${String(get("productCode") ?? name).replace(/\s+/g, "")}`,

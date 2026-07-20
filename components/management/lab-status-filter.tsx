@@ -1,6 +1,7 @@
 "use client";
 
 import type { LabFund } from "@/lib/types";
+import { isRepaidFund } from "@/lib/lab/portfolio-ui";
 
 export type LabStatusFilter = "all" | "active" | "repaid";
 
@@ -15,7 +16,8 @@ export function filterFundsByStatus(
   filter: LabStatusFilter
 ): LabFund[] {
   if (filter === "all") return funds;
-  return funds.filter((f) => f.status === filter);
+  if (filter === "repaid") return funds.filter((f) => isRepaidFund(f));
+  return funds.filter((f) => !isRepaidFund(f));
 }
 
 export function LabStatusFilterTabs({

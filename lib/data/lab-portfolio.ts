@@ -15,7 +15,10 @@ import {
   sbRestoreDeletedName,
   sbUpsertLabFund,
 } from "@/lib/data/supabase-lab-portfolio";
-import { normalizeRateValue } from "@/lib/lab/portfolio-ui";
+import {
+  deriveLabFundStatus,
+  normalizeRateValue,
+} from "@/lib/lab/portfolio-ui";
 import type { LabFund, LabInterestPayment, LabPortfolioSnapshot } from "@/lib/types";
 
 const PERSIST_PATH = path.join(process.cwd(), ".data", "lab-portfolio.json");
@@ -26,10 +29,12 @@ let seeded = false;
 let deletedLabKeys: Set<string> | null = null;
 
 function recomputeStats(funds: LabFund[]): LabPortfolioSnapshot["stats"] {
+  const activeCount = funds.filter((f) => f.status === "active").length;
+  const repaidCount = funds.filter((f) => f.status === "repaid").length;
   return {
     totalCount: funds.length,
-    activeCount: funds.filter((f) => f.status === "active").length,
-    repaidCount: funds.filter((f) => f.status === "repaid").length,
+    activeCount,
+    repaidCount,
     totalSetupAmount: funds.reduce((s, f) => s + (f.setupAmount ?? 0), 0),
     totalBalance: funds.reduce((s, f) => s + (f.balance ?? 0), 0),
   };
@@ -180,7 +185,7 @@ function trySeedFromSample() {
 }
 
 function normalizeFund(f: LabFund): LabFund {
-  return {
+  const next = {
     ...f,
     interestRate: normalizeRateValue(f.interestRate),
     feeRate: normalizeRateValue(f.feeRate),
@@ -194,6 +199,10 @@ function normalizeFund(f: LabFund): LabFund {
     contractor: f.contractor ?? null,
     progressComment: f.progressComment ?? null,
     interestPayments: f.interestPayments ?? [],
+  };
+  return {
+    ...next,
+    status: deriveLabFundStatus(next),
   };
 }
 
@@ -229,12 +238,14 @@ export async function getLabPortfolio(): Promise<LabPortfolioSnapshot | null> {
     try {
       const fromDb = await sbGetLabPortfolio();
       if (fromDb && fromDb.funds.length > 0) {
-        snapshot = fromDb;
-        return {
+        const funds = fromDb.funds.map(normalizeFund);
+        const normalized = {
           ...fromDb,
-          funds: fromDb.funds.map(normalizeFund),
-          stats: recomputeStats(fromDb.funds),
+          funds,
+          stats: recomputeStats(funds),
         };
+        snapshot = normalized;
+        return normalized;
       }
     } catch (err) {
       console.warn("[lab-portfolio] supabase get failed, using local:", err);

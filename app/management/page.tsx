@@ -19,7 +19,7 @@ import {
   sortLabFunds,
 } from "@/lib/lab/portfolio-ui";
 import { calcFundFeeAmount } from "@/lib/lab/portfolio-analytics";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatEok } from "@/lib/utils";
 import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
 
 function statusBadge(status: LabFund["status"]) {
@@ -106,7 +106,7 @@ export default function ManagementOverviewPage() {
                 },
                 {
                   label: "누적수수료",
-                  simpleValue: formatCurrency(totalFeeAmount),
+                  simpleValue: formatEok(totalFeeAmount),
                   barClass: "bg-im-mint",
                 },
               ]}

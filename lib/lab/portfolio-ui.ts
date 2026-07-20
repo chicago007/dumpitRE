@@ -73,7 +73,7 @@ export function groupFundsBySite(funds: LabFund[]): SiteGroup[] {
         key,
         address: siteLabel(key),
         funds: items.sort(compareLabFunds),
-        activeCount: items.filter((f) => f.status === "active").length,
+        activeCount: items.filter((f) => !isRepaidFund(f)).length,
         totalBalance: items.reduce((s, f) => s + (f.balance ?? 0), 0),
         totalSetup: items.reduce((s, f) => s + (f.setupAmount ?? 0), 0),
         maxRound: rounds.length ? Math.max(...rounds) : 0,
@@ -178,12 +178,45 @@ export function progressLabel(value: number | null): string {
   return value == null ? "—" : `${Math.round(value)}%`;
 }
 
+/** 잔액·상환일 기준으로 운용/상환 판별 (저장 status보다 우선) */
+export function deriveLabFundStatus(fund: {
+  balance?: number | null;
+  repaymentDate?: string | null;
+  status?: LabFundStatus;
+}): LabFundStatus {
+  const balance = fund.balance;
+  const repaymentDate = fund.repaymentDate?.trim() || null;
+  const hasRepayDate =
+    Boolean(repaymentDate) &&
+    repaymentDate !== "—" &&
+    repaymentDate !== "-";
+
+  if (balance != null && balance <= 0) return "repaid";
+  if (hasRepayDate && /^\d{4}-\d{2}-\d{2}$/.test(repaymentDate!)) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const repay = new Date(repaymentDate!);
+    if (
+      !Number.isNaN(repay.getTime()) &&
+      repay <= today &&
+      (balance == null || balance <= 0)
+    ) {
+      return "repaid";
+    }
+  }
+  if (hasRepayDate && (balance == null || balance <= 0)) return "repaid";
+  if (balance != null && balance > 0) return "active";
+  if (balance == null && !hasRepayDate) {
+    return fund.status === "unknown" ? "unknown" : fund.status === "repaid" ? "repaid" : "unknown";
+  }
+  return "active";
+}
+
 /** 상환일이 있거나 상태가 상환인 랩 */
 export function isRepaidFund(fund: {
   repaymentDate?: string | null;
   status?: LabFundStatus;
+  balance?: number | null;
 }): boolean {
-  if (fund.status === "repaid") return true;
-  const d = fund.repaymentDate?.trim();
-  return Boolean(d && d !== "—" && d !== "-");
+  return deriveLabFundStatus(fund) === "repaid";
 }

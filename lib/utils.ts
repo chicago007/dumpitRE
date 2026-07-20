@@ -16,6 +16,15 @@ export function formatCurrency(amount: number): string {
   return amount.toLocaleString("ko-KR");
 }
 
+/** 원 → 억, 소수 자릿수 고정 (예: 8.35억) */
+export function formatEok(amount: number, fractionDigits = 2): string {
+  const eok = amount / 100_000_000;
+  return `${eok.toLocaleString("ko-KR", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })}억`;
+}
+
 export function formatMonth(dateStr: string): string {
   const d = new Date(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
