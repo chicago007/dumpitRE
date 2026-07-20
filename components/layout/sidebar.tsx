@@ -32,6 +32,7 @@ type NavItem = {
 };
 
 const overviewSubNav: NavItem[] = [
+  { href: "/management/sites", label: "사업장별(회차별)", icon: MapPinned },
   { href: "/management/setup-repayment", label: "설정·상환 추이", icon: BarChart3 },
   { href: "/management/fee-trend", label: "수수료 추이", icon: Percent },
   { href: "/management/by-entity", label: "업체별 현황", icon: Building2 },
@@ -43,19 +44,12 @@ const interestSubNav: NavItem[] = [
   { href: "/management/interest/schedule", label: "이자 분배 스케줄", icon: Coins },
 ];
 
-const managementNav: NavItem[] = [
-  { href: "/management/sites", label: "사업장별(회차별)", icon: MapPinned },
-];
-
-const workNav: NavItem[] = [
-  { href: "/chat", label: "Q&A", icon: MessageSquare },
-];
-
 const adminNav: NavItem[] = [
   { href: "/admin", label: "상품/사업장", icon: Settings2, exact: true },
   { href: "/admin/portfolio", label: "사업장관리", icon: Table2 },
-  { href: "/admin/sites", label: "전체 공정율", icon: Building2 },
+  { href: "/admin/progress", label: "공정율 현황", icon: ClipboardList },
   { href: "/upload", label: "업로드", icon: Upload },
+  { href: "/chat", label: "Q&A", icon: MessageSquare },
 ];
 
 function isActive(pathname: string, item: NavItem) {
@@ -102,7 +96,9 @@ function NavSubLink({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 function OverviewNavGroup({ pathname }: { pathname: string }) {
-  const parentActive = pathname === "/management";
+  const parentActive =
+    pathname === "/management" ||
+    overviewSubNav.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   const Icon = ClipboardList;
 
   return (
@@ -201,15 +197,6 @@ export function Sidebar({
         <div className="flex flex-col gap-0.5">
           <OverviewNavGroup pathname={pathname} />
           <InterestNavGroup pathname={pathname} />
-          {managementNav.map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-0.5">
-          {workNav.map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
-          ))}
         </div>
 
         {isAdmin ? (

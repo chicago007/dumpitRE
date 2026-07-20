@@ -8,9 +8,15 @@ import { RequireAdmin } from "@/components/auth/require-admin";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { ProposalRegistrationPanel } from "@/components/upload/proposal-registration-panel";
 import { ProposalConditionsTable } from "@/components/upload/proposal-conditions-table";
+import { ProgressMatchPanel } from "@/components/upload/progress-match-panel";
 import { Pill } from "@/components/ui/pill";
 import { Badge } from "@/components/ui/badge";
-import type { DocumentRecord, DocumentType, ProposalRegistrationPrompt } from "@/lib/types";
+import type {
+  DocumentRecord,
+  DocumentType,
+  LabProgressApplyResult,
+  ProposalRegistrationPrompt,
+} from "@/lib/types";
 import type { ParsedProposal } from "@/lib/analyzers/proposal";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +29,7 @@ const docTypes: { id: DocumentType; label: string }[] = [
 ];
 
 const REG_STORAGE_KEY = "dumpitre_pending_proposal_regs_v3";
+const PROGRESS_PENDING_KEY = "dumpitre_pending_progress_match_v1";
 
 const EMPTY_PARSED: ParsedProposal = {
   siteName: null,
@@ -99,7 +106,12 @@ async function buildFallbackRegistration(
         name: f.name,
         fundName: f.fundName,
         siteAddress: f.siteAddress,
-      }));
+      }))
+      .sort((a, b) => {
+        const na = Number(a.name.match(/(\d+)\s*호/)?.[1] ?? 0);
+        const nb = Number(b.name.match(/(\d+)\s*호/)?.[1] ?? 0);
+        return nb - na;
+      });
     const numMatch = fileName.match(/(\d{1,3})\s*호/);
     const labNum = numMatch?.[1] ?? null;
     const suggestedLabName = labNum ? `부동산랩 ${labNum}호` : null;
@@ -158,11 +170,20 @@ export default function UploadPage() {
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [regSaving, setRegSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [stalePrompt, setStalePrompt] = useState<LabProgressApplyResult | null>(null);
+  const [staleApplying, setStaleApplying] = useState(false);
+  const [progressPending, setProgressPending] = useState<LabProgressApplyResult[]>([]);
+  const [progressLabs, setProgressLabs] = useState<
+    { id: string; name: string; fundName: string | null; siteAddress: string | null }[]
+  >([]);
+  const [progressSaving, setProgressSaving] = useState(false);
 
   const registration =
     registrations.find((r) => r.documentId === activeDocumentId) ??
     registrations[0] ??
     null;
+
+  const activeProgressPending = progressPending[0] ?? null;
 
   const setRegs = useCallback((next: ProposalRegistrationPrompt[]) => {
     persistRegistrations(next);
@@ -171,6 +192,15 @@ export default function UploadPage() {
       if (prev && next.some((r) => r.documentId === prev)) return prev;
       return next[0]?.documentId ?? null;
     });
+  }, []);
+
+  const setProgressQueue = useCallback((next: LabProgressApplyResult[]) => {
+    setProgressPending(next);
+    try {
+      sessionStorage.setItem(PROGRESS_PENDING_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -192,15 +222,52 @@ export default function UploadPage() {
     void refresh();
     try {
       const raw = sessionStorage.getItem(REG_STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw) as ProposalRegistrationPrompt[];
-      if (Array.isArray(saved) && saved.length && saved.every((s) => s?.documentId && s.parsed)) {
-        setRegistrations(saved);
-        setActiveDocumentId(saved[0].documentId);
+      if (raw) {
+        const saved = JSON.parse(raw) as ProposalRegistrationPrompt[];
+        if (Array.isArray(saved) && saved.length && saved.every((s) => s?.documentId && s.parsed)) {
+          setRegistrations(saved);
+          setActiveDocumentId(saved[0].documentId);
+        }
       }
     } catch {
       /* ignore */
     }
+    try {
+      const raw = sessionStorage.getItem(PROGRESS_PENDING_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as LabProgressApplyResult[];
+        if (Array.isArray(saved) && saved.length) setProgressPending(saved);
+      }
+    } catch {
+      /* ignore */
+    }
+    fetch("/api/lab-portfolio", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        const funds = Array.isArray(data?.funds) ? data.funds : [];
+        setProgressLabs(
+          funds
+            .map(
+              (f: {
+                id: string;
+                name: string;
+                fundName: string | null;
+                siteAddress: string | null;
+              }) => ({
+                id: f.id,
+                name: f.name,
+                fundName: f.fundName,
+                siteAddress: f.siteAddress,
+              })
+            )
+            .sort((a: { name: string }, b: { name: string }) => {
+              const na = Number(a.name.match(/(\d+)\s*호/)?.[1] ?? 0);
+              const nb = Number(b.name.match(/(\d+)\s*호/)?.[1] ?? 0);
+              return nb - na;
+            })
+        );
+      })
+      .catch(() => undefined);
   }, [refresh]);
 
   async function enrichRegistrations(regs: ProposalRegistrationPrompt[]) {
@@ -237,6 +304,8 @@ export default function UploadPage() {
     setLastFeedback(null);
     try {
       const collected: ProposalRegistrationPrompt[] = [];
+      const unmatchedProgress: LabProgressApplyResult[] = [];
+      let progressOkCount = 0;
 
       for (const file of files) {
         const form = new FormData();
@@ -253,6 +322,8 @@ export default function UploadPage() {
           registration?: ProposalRegistrationPrompt;
           requiresRegistration?: boolean;
           document?: DocumentRecord;
+          labProgress?: LabProgressApplyResult;
+          redirectTo?: string;
           error?: string;
         } = {};
         try {
@@ -276,6 +347,16 @@ export default function UploadPage() {
 
         if (reg) {
           collected.push(reg);
+        } else if (data.labProgress?.action === "stale") {
+          setStalePrompt(data.labProgress);
+          setLastFeedback(data.labProgress.message);
+        } else if (data.labProgress?.action === "unmatched") {
+          unmatchedProgress.push(data.labProgress);
+        } else if (
+          data.labProgress?.action === "created" ||
+          data.labProgress?.action === "updated"
+        ) {
+          progressOkCount += 1;
         } else if (looksProposal) {
           setLastFeedback(
             `${file.name}: 제안서로 인식했지만 선택 화면을 열지 못했습니다. 문서 유형을 「제안서」로 선택 후 다시 업로드해 주세요.`
@@ -289,6 +370,17 @@ export default function UploadPage() {
         }
       }
 
+      if (unmatchedProgress.length) {
+        setProgressQueue([...progressPending, ...unmatchedProgress]);
+        setLastFeedback(
+          `${unmatchedProgress.length}건은 자동 매칭되지 않았습니다. 아래에서 기존 부동산랩을 선택해 주세요.` +
+            (progressOkCount ? ` (자동 반영 ${progressOkCount}건)` : "")
+        );
+      } else if (progressOkCount > 0 && collected.length === 0) {
+        setLastFeedback(`${progressOkCount}건 공정율을 반영했습니다.`);
+        router.push("/admin/progress");
+      }
+
       if (collected.length) {
         const merged = upsertRegistrations(registrations, collected);
         setRegs(merged);
@@ -297,7 +389,6 @@ export default function UploadPage() {
             ? `${collected.length}건 제안서 업로드 · 조건 비교표를 확인하세요.`
             : null
         );
-        // 복수(또는 단건) 업로드 후 Gemini로 조건 보강 → 표 품질 확보
         void enrichRegistrations(merged);
         requestAnimationFrame(() => {
           document.getElementById("proposal-conditions")?.scrollIntoView({ behavior: "smooth" });
@@ -307,6 +398,64 @@ export default function UploadPage() {
       void refresh();
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function confirmStaleProgress() {
+    if (!stalePrompt?.row) return;
+    setStaleApplying(true);
+    try {
+      const res = await fetch("/api/lab-progress/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row: stalePrompt.row, force: true }),
+      });
+      const data = (await res.json()) as LabProgressApplyResult & { error?: string };
+      if (!res.ok) {
+        setLastFeedback(data.error ?? "공정율 반영 실패");
+        return;
+      }
+      setStalePrompt(null);
+      setLastFeedback(data.message ?? "이전 자료로 덮어썼습니다.");
+      router.push("/admin/progress");
+    } catch (err) {
+      setLastFeedback(err instanceof Error ? err.message : "반영 중 오류");
+    } finally {
+      setStaleApplying(false);
+    }
+  }
+
+  async function confirmProgressMatch(labFundId: string) {
+    if (!activeProgressPending?.row) return;
+    setProgressSaving(true);
+    try {
+      const res = await fetch("/api/lab-progress/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          row: activeProgressPending.row,
+          labFundId,
+          force: true,
+        }),
+      });
+      const data = (await res.json()) as LabProgressApplyResult & { error?: string };
+      if (!res.ok || data.action === "unmatched") {
+        setLastFeedback(data.error ?? data.message ?? "공정율 반영 실패");
+        return;
+      }
+      const remaining = progressPending.slice(1);
+      setProgressQueue(remaining);
+      setLastFeedback(
+        `${data.message ?? "저장됨"}` +
+          (remaining.length ? ` · 남은 매칭 ${remaining.length}건` : "")
+      );
+      if (remaining.length === 0) {
+        router.push("/admin/progress");
+      }
+    } catch (err) {
+      setLastFeedback(err instanceof Error ? err.message : "반영 중 오류");
+    } finally {
+      setProgressSaving(false);
     }
   }
 
@@ -363,12 +512,12 @@ export default function UploadPage() {
           ...(data.applied ?? []).map((a: string) => `· ${a}`),
           remaining.length
             ? `남은 제안서 ${remaining.length}건 — 아래에서 이어서 등록하세요.`
-            : "전체현황에서 확인할 수 있습니다.",
+            : "공정율 현황에서 확인할 수 있습니다.",
         ].join("\n")
       );
 
       if (remaining.length === 0) {
-        router.push("/management");
+        router.push("/admin/progress");
       }
       void refresh();
     } finally {
@@ -383,8 +532,46 @@ export default function UploadPage() {
           <div className="space-y-6 lg:col-span-2">
             <p className="text-sm text-muted">
               제안서 PDF 업로드 → <strong>조건 비교표 확인</strong> → 아래에서 신규/기존 선택 →
-              「저장하고 전체현황에 반영」. 여러 건을 올리면 조건을 표로 비교·CSV로 받을 수 있습니다.
+              「저장하고 공정율 현황에 반영」. 여러 건을 올리면 조건을 표로 비교·CSV로 받을 수 있습니다.
             </p>
+
+            {activeProgressPending ? (
+              <div id="progress-match" className="space-y-3">
+                <p className="text-xs text-muted">
+                  공정율 수동 매칭 {progressPending.length}건 대기 중 · 제안서 등록 화면과
+                  다릅니다. 여기서 기존 부동산랩을 고르면 공정율 테이블에 저장됩니다.
+                </p>
+                <ProgressMatchPanel
+                  item={activeProgressPending}
+                  labs={progressLabs}
+                  saving={progressSaving}
+                  onClose={() => {
+                    // 버리지 않음 — 맨 뒤로 보내 대기열 유지
+                    if (progressPending.length <= 1) return;
+                    setProgressQueue([
+                      ...progressPending.slice(1),
+                      progressPending[0],
+                    ]);
+                  }}
+                  onDefer={() => {
+                    if (progressPending.length <= 1) {
+                      setLastFeedback(
+                        "대기 중인 공정율 매칭이 1건입니다. 선택하거나 페이지를 나가도 세션에 보관됩니다."
+                      );
+                      return;
+                    }
+                    setProgressQueue([
+                      ...progressPending.slice(1),
+                      progressPending[0],
+                    ]);
+                    setLastFeedback(
+                      `다음 건으로 넘겼습니다. 대기열 ${progressPending.length}건 유지`
+                    );
+                  }}
+                  onConfirm={(labFundId) => void confirmProgressMatch(labFundId)}
+                />
+              </div>
+            ) : null}
 
             {registrations.length > 0 ? (
               <div id="proposal-conditions" className="space-y-4">
@@ -441,7 +628,40 @@ export default function UploadPage() {
               <Link href="/management" className="text-accent underline">
                 전체 현황
               </Link>
+              {" · "}
+              기성보고서 →{" "}
+              <Link href="/admin/progress" className="text-accent underline">
+                공정율 현황
+              </Link>
             </p>
+
+            {stalePrompt?.action === "stale" && stalePrompt.row ? (
+              <div className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-950">
+                <p className="font-medium">{stalePrompt.message}</p>
+                <p className="mt-2 text-xs">
+                  보관: 확인일 {stalePrompt.existing?.confirmedDate ?? "—"} · 업로드:{" "}
+                  {stalePrompt.row.confirmedDate ?? "—"} ({stalePrompt.row.labName})
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={staleApplying}
+                    onClick={() => void confirmStaleProgress()}
+                    className="rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-900 disabled:opacity-50"
+                  >
+                    예, 업로드 자료로 덮어쓰기
+                  </button>
+                  <button
+                    type="button"
+                    disabled={staleApplying}
+                    onClick={() => setStalePrompt(null)}
+                    className="rounded-md border border-amber-600 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                  >
+                    아니오, 유지
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {lastFeedback && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm whitespace-pre-wrap text-amber-950">

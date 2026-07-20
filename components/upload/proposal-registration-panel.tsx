@@ -41,7 +41,11 @@ export function ProposalRegistrationPanel({
   }, [registration.documentId, registration.matchedLabFundId, registration.suggestedLabName]);
 
   const filteredLabs = useMemo(() => {
-    const options = registration.labOptions ?? [];
+    const options = [...(registration.labOptions ?? [])].sort((a, b) => {
+      const na = Number(a.name.match(/(\d+)\s*호/)?.[1] ?? 0);
+      const nb = Number(b.name.match(/(\d+)\s*호/)?.[1] ?? 0);
+      return nb - na;
+    });
     const q = labFilter.trim().toLowerCase();
     if (!q) return options;
     return options.filter((o) =>
@@ -171,7 +175,7 @@ export function ProposalRegistrationPanel({
             (regMode === "new" && !newLabName.trim())
           }
         >
-          {saving ? "반영 중…" : "② 저장하고 전체현황에 반영"}
+          {saving ? "반영 중…" : "② 저장하고 공정율 현황으로"}
         </Button>
       </div>
     </div>

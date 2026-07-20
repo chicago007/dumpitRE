@@ -7,7 +7,6 @@ import { RequireAdmin } from "@/components/auth/require-admin";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
-import { formatCurrency } from "@/lib/utils";
 import type { ProductMaster } from "@/lib/types";
 
 const emptyForm = {
@@ -108,10 +107,10 @@ export default function AdminProductsPage() {
         <p className="text-xs text-muted">
           랩명·펀드명·사업장 주소를 등록합니다. 제안서에 랩/펀드가 없으면 업로드 시 여기서 등록한
           정보로 매칭하거나, 신규 상품으로 수기 등록합니다.{" "}
-          <Link href="/admin/sites" className="text-accent underline">
-            전체 사업장 공정율
+          <Link href="/admin/progress" className="text-accent underline">
+            공정율 현황
           </Link>
-          은 관리자만 확인합니다.
+          에서 조회·수정할 수 있습니다.
         </p>
 
         <section className="shadow-card rounded-xl border border-border bg-card p-4">
@@ -185,7 +184,6 @@ export default function AdminProductsPage() {
                     <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">펀드명</th>
                     <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">사업장 주소</th>
                     <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">제안서 여부</th>
-                    <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">규모</th>
                     <th className="sticky top-0 bg-slate-100 px-4 py-2.5 font-medium">액션</th>
                   </tr>
                 </thead>
@@ -207,9 +205,6 @@ export default function AdminProductsPage() {
                         ) : (
                           <Badge variant="default">없음</Badge>
                         )}
-                      </td>
-                      <td className="whitespace-nowrap border-t border-border px-4 py-2.5 tabular-nums text-xs">
-                        {p.contractAmount != null ? formatCurrency(p.contractAmount) : "—"}
                       </td>
                       <td className="whitespace-nowrap border-t border-border px-4 py-2.5">
                         <button

@@ -39,13 +39,15 @@ export function UploadDropzone({ onUpload, uploading }: UploadDropzoneProps) {
     >
       <UploadIcon className="mb-3 h-8 w-8 text-muted" />
       <p className="font-medium">파일을 여기에 드래그</p>
-      <p className="mt-1 text-sm text-muted">PDF, XLSX · 최대 50MB · 다중 업로드</p>
+      <p className="mt-1 text-sm text-muted">
+        PDF, PNG/JPG, XLSX · 최대 50MB · 다중 업로드
+      </p>
       <label className="mt-4 cursor-pointer">
         <input
           type="file"
           className="hidden"
           multiple
-          accept=".pdf,.xlsx,.xls"
+          accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls"
           disabled={uploading}
           onChange={(e) => void handleFiles(e.target.files)}
         />

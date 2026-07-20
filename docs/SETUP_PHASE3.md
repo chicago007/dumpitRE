@@ -80,4 +80,10 @@ node --env-file=.env.local scripts/migrate-lab-portfolio.cjs
 curl -X POST http://localhost:3000/api/admin/lab-funds/migrate
 ```
 
-이후 업로드/사업장관리 저장은 Supabase에 기록되며 Vercel에서도 동일하게 보입니다.
+## 7. 공정율 (기성보고서)
+
+1. SQL Editor에서 `supabase/migrations/004_lab_progress.sql` 실행
+2. 업로드 → 문서 유형 **공정율** (또는 자동 인식)으로 기성보고서 PDF 업로드
+3. **관리자 → 공정율 현황** (`/admin/progress`)에서 조회 · 「수정」으로 편집
+
+동일 랩에 더 오래된 확인일 자료를 올리면 업로드 화면에서 덮어쓰기 여부를 묻습니다.

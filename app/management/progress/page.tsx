@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function SitesPage() {
+export default function ManagementProgressRedirect() {
   redirect("/admin/progress");
 }

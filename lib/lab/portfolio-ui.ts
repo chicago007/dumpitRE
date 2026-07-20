@@ -191,23 +191,16 @@ export function deriveLabFundStatus(fund: {
     repaymentDate !== "—" &&
     repaymentDate !== "-";
 
+  // 잔액 0 또는 상환일 입력 → 상환 (잔액이 남아 있어도 상환일 우선)
   if (balance != null && balance <= 0) return "repaid";
-  if (hasRepayDate && /^\d{4}-\d{2}-\d{2}$/.test(repaymentDate!)) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const repay = new Date(repaymentDate!);
-    if (
-      !Number.isNaN(repay.getTime()) &&
-      repay <= today &&
-      (balance == null || balance <= 0)
-    ) {
-      return "repaid";
-    }
-  }
-  if (hasRepayDate && (balance == null || balance <= 0)) return "repaid";
+  if (hasRepayDate) return "repaid";
   if (balance != null && balance > 0) return "active";
   if (balance == null && !hasRepayDate) {
-    return fund.status === "unknown" ? "unknown" : fund.status === "repaid" ? "repaid" : "unknown";
+    return fund.status === "unknown"
+      ? "unknown"
+      : fund.status === "repaid"
+        ? "repaid"
+        : "unknown";
   }
   return "active";
 }

@@ -174,6 +174,7 @@ export function parseCostCmReport(rawText: string, fileName: string): ParsedCost
 
 export function inferDocumentType(fileName: string): DocumentType {
   const lower = fileName.toLowerCase();
+  const nfc = fileName.normalize("NFC");
   if (
     lower.includes("랩현황") ||
     lower.includes("관리현황") ||
@@ -181,7 +182,13 @@ export function inferDocumentType(fileName: string): DocumentType {
   ) {
     return "management_status";
   }
-  if (lower.includes("기성") || lower.includes("공정")) return "progress_report";
+  if (
+    /필증|착공신고|건축허가|사업계획\s*승인|인허가/.test(nfc) ||
+    lower.includes("기성") ||
+    lower.includes("공정")
+  ) {
+    return "progress_report";
+  }
   if (lower.includes("제안") || lower.includes("proposal") || lower.includes("im_sh")) return "proposal";
   if (lower.includes("자금") || lower.includes("집행")) return "fund_schedule";
   return "other";

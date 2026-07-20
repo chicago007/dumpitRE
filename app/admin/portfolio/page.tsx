@@ -15,10 +15,12 @@ function PercentRateInput({
   value,
   onChange,
   className,
+  readOnly,
 }: {
   value: string | null;
   onChange: (v: string | null) => void;
   className: string;
+  readOnly?: boolean;
 }) {
   const [text, setText] = useState(() => formatRateInput(value));
   const [focused, setFocused] = useState(false);
@@ -32,9 +34,15 @@ function PercentRateInput({
       className={className}
       inputMode="decimal"
       value={text}
-      onFocus={() => setFocused(true)}
-      onChange={(e) => setText(e.target.value)}
+      readOnly={readOnly}
+      onFocus={() => {
+        if (!readOnly) setFocused(true);
+      }}
+      onChange={(e) => {
+        if (!readOnly) setText(e.target.value);
+      }}
       onBlur={() => {
+        if (readOnly) return;
         setFocused(false);
         const parsed = canonicalRateInput(text);
         setText(parsed ?? "");
@@ -73,6 +81,7 @@ export default function AdminPortfolioManagePage() {
   const [q, setQ] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const maxRound = useMemo(() => {
     let m = 6;
@@ -218,21 +227,51 @@ export default function AdminPortfolioManagePage() {
     setMessage(data.message ?? "삭제됨");
   }
 
+  function exitEdit() {
+    setEditing(false);
+    setMessage(null);
+    void refresh();
+  }
+
   const cell =
     "min-w-[8rem] border border-border bg-white px-1.5 py-1 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent/30";
+  const cellView =
+    "min-w-[8rem] border border-border bg-transparent px-1.5 py-1 text-xs outline-none";
+  const fieldClass = editing ? cell : cellView;
   const head =
     "sticky top-0 z-10 border border-border bg-neutral-100 px-2 py-2 text-left text-[11px] font-semibold whitespace-nowrap";
 
   return (
     <RequireAdmin>
-      <AppShell title="관리자 · 사업장관리">
+      <AppShell
+        title="관리자 · 사업장관리"
+        action={
+          editing ? (
+            <Button type="button" variant="secondary" className="h-8 text-xs" onClick={exitEdit}>
+              조회 모드
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="h-8 text-xs"
+              onClick={() => setEditing(true)}
+              disabled={rows.length === 0}
+            >
+              수정
+            </Button>
+          )
+        }
+      >
         <div className="space-y-3">
           <p className="text-xs text-muted">
             이 테이블이 <strong>마스터</strong>입니다. 전체현황·사업장별(회차별)은 여기를 표시합니다.{" "}
+            {editing
+              ? "셀을 수정한 뒤 저장하세요."
+              : "상단 「수정」을 누르면 편집할 수 있습니다."}{" "}
             <Link href="/upload" className="text-accent underline">
               관리현황 엑셀 업로드
             </Link>
-            또는 아래에서 수정한 뒤 엑셀로 다시 받을 수 있습니다.
+            또는 엑셀로 다시 받을 수 있습니다.
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -256,7 +295,7 @@ export default function AdminPortfolioManagePage() {
             </Button>
             <span className="text-xs text-muted">
               {filtered.length} / {rows.length}건
-              {rows.some((r) => r.dirty) ? " · 미저장 변경 있음" : ""}
+              {editing && rows.some((r) => r.dirty) ? " · 미저장 변경 있음" : ""}
             </span>
             {message ? <span className="text-xs text-accent">{message}</span> : null}
           </div>
@@ -301,7 +340,9 @@ export default function AdminPortfolioManagePage() {
                         {i + 1}차지급
                       </th>
                     ))}
-                    <th className={`${head} sticky right-0 z-20`}>작업</th>
+                    {editing ? (
+                      <th className={`${head} sticky right-0 z-20`}>작업</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -310,29 +351,46 @@ export default function AdminPortfolioManagePage() {
                     return (
                       <tr
                         key={row.id}
-                        className={row.dirty ? "bg-amber-50/50" : "odd:bg-neutral-50/40"}
+                        className={
+                          editing && row.dirty
+                            ? "bg-amber-50/50"
+                            : "odd:bg-neutral-50/40"
+                        }
                       >
                         <td className="sticky left-0 z-10 border border-border bg-inherit p-0">
                           <input
-                            className={`${cell} w-36 font-medium`}
+                            className={`${fieldClass} w-36 font-medium`}
                             value={row.name}
-                            onChange={(e) => patchRow(row.id, { name: e.target.value })}
+                            readOnly={!editing}
+                            onChange={(e) =>
+                              editing && patchRow(row.id, { name: e.target.value })
+                            }
                           />
                         </td>
                         <td className="border border-border p-0">
-                          <select
-                            className={`${cell} w-24`}
-                            value={row.status}
-                            onChange={(e) =>
-                              patchRow(row.id, {
-                                status: e.target.value as LabFundStatus,
-                              })
-                            }
-                          >
-                            <option value="active">진행중</option>
-                            <option value="repaid">상환</option>
-                            <option value="unknown">기타</option>
-                          </select>
+                          {editing ? (
+                            <select
+                              className={`${fieldClass} w-24`}
+                              value={row.status}
+                              onChange={(e) =>
+                                patchRow(row.id, {
+                                  status: e.target.value as LabFundStatus,
+                                })
+                              }
+                            >
+                              <option value="active">진행중</option>
+                              <option value="repaid">상환</option>
+                              <option value="unknown">기타</option>
+                            </select>
+                          ) : (
+                            <span className={`${fieldClass} inline-block w-24`}>
+                              {row.status === "active"
+                                ? "진행중"
+                                : row.status === "repaid"
+                                  ? "상환"
+                                  : "기타"}
+                            </span>
+                          )}
                         </td>
                         {(
                           [
@@ -355,9 +413,11 @@ export default function AdminPortfolioManagePage() {
                         ).map(([key, val, width]) => (
                           <td key={key} className="border border-border p-0">
                             <input
-                              className={`${cell} ${width}`}
+                              className={`${fieldClass} ${width}`}
                               value={val ?? ""}
+                              readOnly={!editing}
                               onChange={(e) =>
+                                editing &&
                                 patchRow(row.id, { [key]: e.target.value || null })
                               }
                             />
@@ -365,8 +425,9 @@ export default function AdminPortfolioManagePage() {
                         ))}
                         <td className="border border-border p-0">
                           <PercentRateInput
-                            className={`${cell} w-16`}
+                            className={`${fieldClass} w-16`}
                             value={row.interestRate}
+                            readOnly={!editing}
                             onChange={(interestRate) =>
                               patchRow(row.id, { interestRate })
                             }
@@ -374,16 +435,19 @@ export default function AdminPortfolioManagePage() {
                         </td>
                         <td className="border border-border p-0">
                           <PercentRateInput
-                            className={`${cell} w-16`}
+                            className={`${fieldClass} w-16`}
                             value={row.feeRate}
+                            readOnly={!editing}
                             onChange={(feeRate) => patchRow(row.id, { feeRate })}
                           />
                         </td>
                         <td className="border border-border p-0">
                           <input
-                            className={`${cell} w-20`}
+                            className={`${fieldClass} w-20`}
                             value={wonToEok(row.setupAmount)}
+                            readOnly={!editing}
                             onChange={(e) =>
+                              editing &&
                               patchRow(row.id, {
                                 setupAmount: eokToWon(e.target.value),
                               })
@@ -392,9 +456,11 @@ export default function AdminPortfolioManagePage() {
                         </td>
                         <td className="border border-border p-0">
                           <input
-                            className={`${cell} w-20`}
+                            className={`${fieldClass} w-20`}
                             value={wonToEok(row.balance)}
+                            readOnly={!editing}
                             onChange={(e) =>
+                              editing &&
                               patchRow(row.id, {
                                 balance: eokToWon(e.target.value),
                               })
@@ -411,10 +477,12 @@ export default function AdminPortfolioManagePage() {
                         ).map(([key, val]) => (
                           <td key={key} className="border border-border p-0">
                             <input
-                              className={`${cell} w-28`}
-                              placeholder="YYYY-MM-DD"
+                              className={`${fieldClass} w-28`}
+                              placeholder={editing ? "YYYY-MM-DD" : undefined}
                               value={val ?? ""}
+                              readOnly={!editing}
                               onChange={(e) =>
+                                editing &&
                                 patchRow(row.id, { [key]: e.target.value || null })
                               }
                             />
@@ -422,9 +490,11 @@ export default function AdminPortfolioManagePage() {
                         ))}
                         <td className="border border-border p-0">
                           <input
-                            className={`${cell} w-16`}
+                            className={`${fieldClass} w-16`}
                             value={row.actualProgressPct ?? ""}
+                            readOnly={!editing}
                             onChange={(e) =>
+                              editing &&
                               patchRow(row.id, {
                                 actualProgressPct: e.target.value
                                   ? Number(e.target.value)
@@ -435,9 +505,11 @@ export default function AdminPortfolioManagePage() {
                         </td>
                         <td className="border border-border p-0">
                           <input
-                            className={`${cell} w-16`}
+                            className={`${fieldClass} w-16`}
                             value={row.plannedProgressPct ?? ""}
+                            readOnly={!editing}
                             onChange={(e) =>
+                              editing &&
                               patchRow(row.id, {
                                 plannedProgressPct: e.target.value
                                   ? Number(e.target.value)
@@ -448,9 +520,11 @@ export default function AdminPortfolioManagePage() {
                         </td>
                         <td className="border border-border p-0">
                           <input
-                            className={`${cell} w-40`}
+                            className={`${fieldClass} w-40`}
                             value={row.note ?? ""}
+                            readOnly={!editing}
                             onChange={(e) =>
+                              editing &&
                               patchRow(row.id, { note: e.target.value || null })
                             }
                           />
@@ -458,35 +532,38 @@ export default function AdminPortfolioManagePage() {
                         {Array.from({ length: maxRound }, (_, i) => (
                           <td key={i + 1} className="border border-border p-0">
                             <input
-                              className={`${cell} w-28`}
-                              placeholder="YYYY-MM-DD"
+                              className={`${fieldClass} w-28`}
+                              placeholder={editing ? "YYYY-MM-DD" : undefined}
                               value={pays[i + 1] ?? ""}
+                              readOnly={!editing}
                               onChange={(e) =>
-                                setPayment(row.id, i + 1, e.target.value)
+                                editing && setPayment(row.id, i + 1, e.target.value)
                               }
                             />
                           </td>
                         ))}
-                        <td className="sticky right-0 z-10 border border-border bg-inherit px-2 py-1 whitespace-nowrap">
-                          <div className="flex gap-1">
-                            <Button
-                              type="button"
-                              className="h-7 px-2 text-[11px]"
-                              disabled={!row.dirty || savingId === row.id}
-                              onClick={() => saveRow(row)}
-                            >
-                              {savingId === row.id ? "…" : "저장"}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-7 px-2 text-[11px]"
-                              onClick={() => removeRow(row)}
-                            >
-                              삭제
-                            </Button>
-                          </div>
-                        </td>
+                        {editing ? (
+                          <td className="sticky right-0 z-10 border border-border bg-inherit px-2 py-1 whitespace-nowrap">
+                            <div className="flex gap-1">
+                              <Button
+                                type="button"
+                                className="h-7 px-2 text-[11px]"
+                                disabled={!row.dirty || savingId === row.id}
+                                onClick={() => saveRow(row)}
+                              >
+                                {savingId === row.id ? "…" : "저장"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => removeRow(row)}
+                              >
+                                삭제
+                              </Button>
+                            </div>
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })}

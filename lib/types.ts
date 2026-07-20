@@ -149,6 +149,46 @@ export interface LabPortfolioSnapshot {
   };
 }
 
+/** 기성/공정확인서 기준 랩 회차별 공정율 스냅샷 */
+export interface LabProgressRow {
+  id: string;
+  labFundId: string | null;
+  labName: string;
+  fundName: string | null;
+  siteAddress: string | null;
+  plannedProgressPct: number | null;
+  actualProgressPct: number | null;
+  achievementPct: number | null;
+  delayDays: number | null;
+  confirmedDate: string | null;
+  specialNotes: string | null;
+  sourceFileName: string | null;
+  documentId: string | null;
+  updatedAt: string;
+}
+
+export type LabProgressApplyAction = "created" | "updated" | "stale" | "unmatched";
+
+export interface LabProgressMatchCandidate {
+  labName: string;
+  fundName: string | null;
+  siteAddress: string | null;
+  score: number;
+}
+
+export interface LabProgressApplyResult {
+  action: LabProgressApplyAction;
+  message: string;
+  row: LabProgressRow | null;
+  existing: LabProgressRow | null;
+  /** 동일주소·유사후보 — 수동 선택 시 우선 표시 */
+  matchCandidates?: LabProgressMatchCandidate[];
+  /** 동일 사업장·다른 사업자 등으로 확인 필요 */
+  needsConfirmation?: boolean;
+  /** 펀드명·사업자로 추정한 추천 랩 (확인 UI 프리셀렉트) */
+  suggestedLabName?: string | null;
+}
+
 /** 관리자: 랩명/펀드명/사업장 주소 마스터 */
 export interface ProductMaster {
   id: string;

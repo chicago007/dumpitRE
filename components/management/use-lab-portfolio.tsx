@@ -1,18 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import type { LabPortfolioSnapshot } from "@/lib/types";
+import { mergeLabProgressIntoFunds } from "@/lib/lab/merge-progress";
+import type { LabFund, LabPortfolioSnapshot, LabProgressRow } from "@/lib/types";
 
 export function useLabPortfolio() {
-  const [portfolio, setPortfolio] = useState<LabPortfolioSnapshot | null>(null);
+  const [raw, setRaw] = useState<LabPortfolioSnapshot | null>(null);
+  const [progressRows, setProgressRows] = useState<LabProgressRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetch("/api/lab-portfolio", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: LabPortfolioSnapshot) => setPortfolio(data))
+    Promise.all([
+      fetch("/api/lab-portfolio", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/lab-progress", { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => []),
+    ])
+      .then(([data, progress]) => {
+        setRaw(data as LabPortfolioSnapshot);
+        setProgressRows(Array.isArray(progress) ? (progress as LabProgressRow[]) : []);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -21,7 +30,21 @@ export function useLabPortfolio() {
     refresh();
   }, [refresh]);
 
-  return { portfolio, loading, funds: portfolio?.funds ?? [] };
+  const portfolio = useMemo(() => {
+    if (!raw) return null;
+    return {
+      ...raw,
+      funds: mergeLabProgressIntoFunds(raw.funds, progressRows),
+    };
+  }, [raw, progressRows]);
+
+  return {
+    portfolio,
+    loading,
+    funds: portfolio?.funds ?? ([] as LabFund[]),
+    progressRows,
+    refresh,
+  };
 }
 
 export function PortfolioPageFrame({
@@ -31,7 +54,7 @@ export function PortfolioPageFrame({
 }: {
   loading: boolean;
   portfolio: LabPortfolioSnapshot | null;
-  children: (funds: LabPortfolioSnapshot["funds"]) => ReactNode;
+  children: (funds: LabFund[]) => ReactNode;
 }) {
   if (loading && !portfolio) {
     return <p className="text-sm text-muted">불러오는 중…</p>;

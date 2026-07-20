@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { FundProgressBadge } from "@/components/management/fund-panels";
@@ -10,6 +10,7 @@ import {
   type LabStatusFilter,
 } from "@/components/management/lab-status-filter";
 import { RatioBars } from "@/components/management/ratio-donut";
+import { useLabPortfolio } from "@/components/management/use-lab-portfolio";
 import { FundStatusBadge } from "@/components/ui/fund-status-badge";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import {
@@ -20,29 +21,15 @@ import {
 } from "@/lib/lab/portfolio-ui";
 import { calcFundFeeAmount } from "@/lib/lab/portfolio-analytics";
 import { formatCurrency, formatEok } from "@/lib/utils";
-import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
+import type { LabFund } from "@/lib/types";
 
 function statusBadge(status: LabFund["status"]) {
   return <FundStatusBadge status={status} />;
 }
 
 export default function ManagementOverviewPage() {
-  const [portfolio, setPortfolio] = useState<LabPortfolioSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { portfolio, loading } = useLabPortfolio();
   const [filter, setFilter] = useState<LabStatusFilter>("all");
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    fetch("/api/lab-portfolio", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data) => setPortfolio(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   const funds = useMemo(() => {
     if (!portfolio) return [];

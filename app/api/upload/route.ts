@@ -14,6 +14,13 @@ import {
   parseLabStatusExcel,
 } from "@/lib/analyzers/lab-status-excel";
 import { extractPdfText } from "@/lib/analyzers/pdf-extract";
+import { extractImageText, isImageFileName } from "@/lib/analyzers/image-extract";
+import {
+  extractGisungDateFromPdf,
+  looksLikeBrokenCoverDate,
+} from "@/lib/analyzers/gisung-date-fallback";
+import { ingestGisungProgress } from "@/lib/data/lab-progress";
+import { parseGisungReport } from "@/lib/analyzers/gisung-progress";
 import {
   createDocument,
   indexDocumentText,
@@ -27,21 +34,25 @@ import {
   uploadToGoogleDrive,
 } from "@/lib/google-drive/client";
 import { saveUploadLocally } from "@/lib/storage/local";
-import type { DocumentRecord, DocumentType, ProposalRegistrationPrompt } from "@/lib/types";
+import type { DocumentRecord, DocumentType, LabProgressApplyResult, ProposalRegistrationPrompt } from "@/lib/types";
 
 function resolveEffectiveType(typeParam: DocumentType, fileName: string, isPdf: boolean): DocumentType {
   if (isPdf && typeParam === "proposal") return "proposal";
   const inferred = inferDocumentType(fileName);
   if (typeParam === "other") return inferred;
-  // 파일명에 제안/공정이 분명하면 UI에서 고른 유형보다 추론 우선
+  // 파일명에 제안/공정/필증이 분명하면 UI에서 고른 유형보다 추론 우선
   if (
-    isPdf &&
+    (isPdf || isImageFileName(fileName)) &&
     (inferred === "proposal" || inferred === "progress_report") &&
     typeParam !== inferred
   ) {
     return inferred;
   }
-  if (isPdf && typeParam === "management_status" && (inferred === "proposal" || inferred === "progress_report")) {
+  if (
+    (isPdf || isImageFileName(fileName)) &&
+    typeParam === "management_status" &&
+    (inferred === "proposal" || inferred === "progress_report")
+  ) {
     return inferred;
   }
   return typeParam;
@@ -71,6 +82,7 @@ export async function POST(req: NextRequest) {
   let chunkCount = 0;
   let docType: DocumentType = treatAsProposal ? "proposal" : inferredType;
   let registration: ProposalRegistrationPrompt | null = null;
+  let labProgress: LabProgressApplyResult | null = null;
   let pdfTextForIndex = "";
 
   if (typeParam !== inferredType) {
@@ -81,7 +93,7 @@ export async function POST(req: NextRequest) {
     await saveUploadLocally(file.name, buffer);
 
     if (isPdf) {
-      const pdfText = await extractPdfText(buffer);
+      let pdfText = await extractPdfText(buffer);
       pdfTextForIndex = pdfText;
 
       if (treatAsProposal) {
@@ -110,20 +122,61 @@ export async function POST(req: NextRequest) {
         });
         siteName = parsed.siteName ?? registration.suggestedLabName;
       } else if (inferredType === "progress_report") {
-        const parsed = parseCostCmReport(pdfText, file.name);
-        siteId = resolveSiteId(parsed.siteName, file.name);
-        siteName = parsed.siteName ?? (siteId ? sites.find((s) => s.id === siteId)?.name ?? null : null);
+        const force = form.get("force") === "true";
+        // 표지 일자 숫자가 null-byte로 깨진 PDF(예: 72호 인계동) → Gemini로 복구
+        const preview = parseGisungReport(pdfText, file.name);
+        if (
+          !preview.reportDate &&
+          (looksLikeBrokenCoverDate(pdfText) || /기성|공정확인/.test(file.name))
+        ) {
+          const recovered = await extractGisungDateFromPdf(buffer, file.name);
+          if (recovered.date) {
+            const [y, m, d] = recovered.date.split("-");
+            pdfText = `일자 ${y}년 ${Number(m)}월 ${Number(d)}일\n${pdfText}`;
+            pdfTextForIndex = pdfText;
+            applied.push(`확인일 복구 ${recovered.date}`);
+          } else if (recovered.warning) {
+            warnings.push(recovered.warning);
+          }
+        }
+        labProgress = await ingestGisungProgress({
+          pdfText,
+          fileName: file.name,
+          documentId: docId,
+          force,
+        });
+        applied.push(labProgress.message);
+        if (labProgress.row?.labName) {
+          siteName = labProgress.row.labName;
+        }
 
-        const result = await persistCostCmReport(siteId, parsed, docId);
-        applied.push(...result.applied);
-        warnings.push(...result.warnings);
-
-        if (!siteId) analysisStatus = "needs_review";
-        else if (parsed.overallProgressPct == null) {
+        if (labProgress.action === "stale") {
+          analysisStatus = "needs_review";
+          warnings.push(labProgress.message);
+        } else if (labProgress.action === "unmatched") {
+          analysisStatus = "needs_review";
+          warnings.push(labProgress.message);
+        } else if (
+          labProgress.row?.actualProgressPct == null &&
+          labProgress.row?.plannedProgressPct == null &&
+          !labProgress.row?.specialNotes?.includes("필증")
+        ) {
           analysisStatus = "needs_review";
           warnings.push("공정율 추출 실패");
         } else {
           analysisStatus = "done";
+        }
+
+        // 레거시 site 연동 (선택)
+        const parsed = parseCostCmReport(pdfText, file.name);
+        siteId = resolveSiteId(parsed.siteName, file.name);
+        if (!siteName && siteId) {
+          siteName = sites.find((s) => s.id === siteId)?.name ?? null;
+        }
+        if (siteId && parsed.overallProgressPct != null) {
+          const legacy = await persistCostCmReport(siteId, parsed, docId);
+          applied.push(...legacy.applied);
+          warnings.push(...legacy.warnings);
         }
       } else {
         siteId = resolveSiteId(null, file.name);
@@ -142,11 +195,36 @@ export async function POST(req: NextRequest) {
       applied.push(`랩 ${portfolio.stats.totalCount}건`);
       applied.push(`운용 ${portfolio.stats.activeCount}건`);
       applied.push(`상환 ${portfolio.stats.repaidCount}건`);
+    } else if (
+      inferredType === "progress_report" &&
+      isImageFileName(file.name)
+    ) {
+      // PNG/JPG 필증·공정 관련 이미지
+      const force = form.get("force") === "true";
+      const img = await extractImageText(buffer, file.name, file.type);
+      if (img.warning) warnings.push(img.warning);
+      pdfTextForIndex = img.text;
+      labProgress = await ingestGisungProgress({
+        pdfText: img.text,
+        fileName: file.name,
+        documentId: docId,
+        force,
+      });
+      applied.push(labProgress.message);
+      if (labProgress.row?.labName) siteName = labProgress.row.labName;
+      if (labProgress.action === "stale" || labProgress.action === "unmatched") {
+        analysisStatus = "needs_review";
+        warnings.push(labProgress.message);
+      } else {
+        analysisStatus = "done";
+      }
     } else {
       siteId = resolveSiteId(null, file.name);
       siteName = siteId ? sites.find((s) => s.id === siteId)?.name ?? null : null;
       analysisStatus = siteId ? "done" : "pending";
-      warnings.push("Excel 파서는 추후 지원 (관리현황 엑셀은 문서 유형을 ‘관리현황’으로 선택하세요)");
+      warnings.push(
+        "Excel 파서는 추후 지원 (관리현황 엑셀은 문서 유형을 ‘관리현황’으로 선택하세요). PNG/JPG 필증은 문서 유형을 ‘공정율’로 올리거나 파일명에 필증을 넣어 주세요."
+      );
     }
   } catch (err) {
     analysisStatus = "failed";
@@ -247,9 +325,15 @@ export async function POST(req: NextRequest) {
     chunkCount,
     registration,
     requiresRegistration: Boolean(registration),
+    labProgress,
     driveUpload,
     redirectTo:
-      docType === "management_status" && !registration ? "/management" : undefined,
+      docType === "management_status" && !registration
+        ? "/management"
+        : docType === "progress_report" &&
+            (labProgress?.action === "created" || labProgress?.action === "updated")
+          ? "/admin/progress"
+          : undefined,
     message: registration
       ? analysisMessage
       : `${analysisMessage}${driveUpload.ok ? "" : `\n${driveUpload.message}`}`,

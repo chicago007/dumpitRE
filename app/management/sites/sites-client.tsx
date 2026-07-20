@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { LabRoundCard } from "@/components/management/fund-panels";
+import { useLabPortfolio } from "@/components/management/use-lab-portfolio";
 import {
   decodeSiteParam,
   siteKey,
   sortLabFunds,
 } from "@/lib/lab/portfolio-ui";
 import { cn } from "@/lib/utils";
-import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
+import type { LabFund } from "@/lib/types";
 
 export default function ManagementSitesPage() {
   const router = useRouter();
@@ -19,31 +20,18 @@ export default function ManagementSitesPage() {
   const siteFilter = decodeSiteParam(searchParams.get("site"));
   const labParam = searchParams.get("lab");
 
-  const [portfolio, setPortfolio] = useState<LabPortfolioSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { portfolio, loading, refresh } = useLabPortfolio();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    fetch("/api/lab-portfolio", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: LabPortfolioSnapshot) => setPortfolio(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const [localOverrides, setLocalOverrides] = useState<Record<string, LabFund>>({});
 
   const selectableFunds = useMemo(() => {
     if (!portfolio) return [] as LabFund[];
-    let list = portfolio.funds;
+    let list = portfolio.funds.map((f) => localOverrides[f.id] ?? f);
     if (siteFilter) {
       list = list.filter((f) => siteKey(f) === siteFilter);
     }
     return sortLabFunds(list);
-  }, [portfolio, siteFilter]);
+  }, [portfolio, siteFilter, localOverrides]);
 
   useEffect(() => {
     if (selectableFunds.length === 0) {
@@ -77,13 +65,8 @@ export default function ManagementSitesPage() {
   }
 
   function handleFundUpdated(fund: LabFund) {
-    setPortfolio((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        funds: prev.funds.map((f) => (f.id === fund.id ? fund : f)),
-      };
-    });
+    setLocalOverrides((prev) => ({ ...prev, [fund.id]: fund }));
+    void refresh();
   }
 
   const siteLabel =
@@ -115,7 +98,7 @@ export default function ManagementSitesPage() {
             >
               <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border/60 px-1.5 py-2.5">
                 <p className="text-[10px] font-medium tracking-wide text-neutral-400">
-                  랩
+                  부동산랩
                 </p>
                 <span className="text-[10px] text-neutral-400">{selectableFunds.length}</span>
               </div>
