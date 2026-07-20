@@ -10,9 +10,7 @@ import { ProposalRegistrationPanel } from "@/components/upload/proposal-registra
 import { ProposalConditionsTable } from "@/components/upload/proposal-conditions-table";
 import { ProgressMatchPanel } from "@/components/upload/progress-match-panel";
 import { Pill } from "@/components/ui/pill";
-import { Badge } from "@/components/ui/badge";
 import type {
-  DocumentRecord,
   DocumentType,
   LabProgressApplyResult,
   ProposalRegistrationPrompt,
@@ -25,7 +23,6 @@ const docTypes: { id: DocumentType; label: string }[] = [
   { id: "management_status", label: "관리현황" },
   { id: "proposal", label: "제안서" },
   { id: "progress_report", label: "공정율" },
-  { id: "fund_schedule", label: "자금집행" },
 ];
 
 const REG_STORAGE_KEY = "dumpitre_pending_proposal_regs_v3";
@@ -164,7 +161,6 @@ export default function UploadPage() {
   const router = useRouter();
   const [docType, setDocType] = useState<DocumentType>("proposal");
   const [uploading, setUploading] = useState(false);
-  const [queue, setQueue] = useState<DocumentRecord[]>([]);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
   const [registrations, setRegistrations] = useState<ProposalRegistrationPrompt[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
@@ -203,23 +199,7 @@ export default function UploadPage() {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/documents?t=${Date.now()}`, { cache: "no-store" });
-      const text = await r.text();
-      if (!r.ok || !text.trim()) {
-        setQueue([]);
-        return;
-      }
-      const parsed: unknown = JSON.parse(text);
-      setQueue(Array.isArray(parsed) ? (parsed as DocumentRecord[]) : []);
-    } catch (err) {
-      console.warn("[upload] documents refresh skipped:", err);
-    }
-  }, []);
-
   useEffect(() => {
-    void refresh();
     try {
       const raw = sessionStorage.getItem(REG_STORAGE_KEY);
       if (raw) {
@@ -268,7 +248,7 @@ export default function UploadPage() {
         );
       })
       .catch(() => undefined);
-  }, [refresh]);
+  }, []);
 
   async function enrichRegistrations(regs: ProposalRegistrationPrompt[]) {
     if (regs.length === 0) return;
@@ -321,7 +301,7 @@ export default function UploadPage() {
           message?: string;
           registration?: ProposalRegistrationPrompt;
           requiresRegistration?: boolean;
-          document?: DocumentRecord;
+          document?: { id?: string };
           labProgress?: LabProgressApplyResult;
           redirectTo?: string;
           error?: string;
@@ -366,7 +346,19 @@ export default function UploadPage() {
         }
 
         if (collected.length === 0 && docType === "management_status") {
-          router.push("/management");
+          router.push("/admin/portfolio");
+          return;
+        }
+
+        if (
+          data.redirectTo &&
+          docType === "progress_report" &&
+          !data.registration &&
+          data.labProgress?.action !== "unmatched" &&
+          data.labProgress?.action !== "stale"
+        ) {
+          router.push(data.redirectTo);
+          return;
         }
       }
 
@@ -394,8 +386,6 @@ export default function UploadPage() {
           document.getElementById("proposal-conditions")?.scrollIntoView({ behavior: "smooth" });
         });
       }
-
-      void refresh();
     } finally {
       setUploading(false);
     }
@@ -512,14 +502,13 @@ export default function UploadPage() {
           ...(data.applied ?? []).map((a: string) => `· ${a}`),
           remaining.length
             ? `남은 제안서 ${remaining.length}건 — 아래에서 이어서 등록하세요.`
-            : "공정율 현황에서 확인할 수 있습니다.",
+            : "사업장관리에서 확인할 수 있습니다.",
         ].join("\n")
       );
 
       if (remaining.length === 0) {
-        router.push("/admin/progress");
+        router.push("/admin/portfolio");
       }
-      void refresh();
     } finally {
       setRegSaving(false);
     }
@@ -528,11 +517,16 @@ export default function UploadPage() {
   return (
     <RequireAdmin>
       <AppShell title="관리자 · 문서 업로드">
-        <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-2">
-          <div className="space-y-6 lg:col-span-2">
+        <div className="mx-auto max-w-5xl space-y-8">
+          <div className="space-y-6">
             <p className="text-sm text-muted">
               제안서 PDF 업로드 → <strong>조건 비교표 확인</strong> → 아래에서 신규/기존 선택 →
-              「저장하고 공정율 현황에 반영」. 여러 건을 올리면 조건을 표로 비교·CSV로 받을 수 있습니다.
+              「저장하고 공정율 현황에 반영」. 여러 건을 올리면 조건을 표로 비교·CSV로 받을 수
+              있습니다. 수동 확인이 필요한 건은{" "}
+              <Link href="/admin/review" className="text-accent underline">
+                검토 대기함
+              </Link>
+              에서 이어서 처리할 수 있습니다.
             </p>
 
             {activeProgressPending ? (
@@ -625,8 +619,8 @@ export default function UploadPage() {
 
             <p className="text-sm text-muted">
               관리현황 엑셀 →{" "}
-              <Link href="/management" className="text-accent underline">
-                전체 현황
+              <Link href="/admin/portfolio" className="text-accent underline">
+                사업장관리
               </Link>
               {" · "}
               기성보고서 →{" "}
@@ -669,41 +663,8 @@ export default function UploadPage() {
               </div>
             )}
           </div>
-
-          <div>
-            <h3 className="mb-3 text-sm font-semibold">업로드 큐</h3>
-            <div className="space-y-3">
-              {queue.map((item) => (
-                <div key={item.id} className="rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium">{item.fileName}</p>
-                      <p className="text-xs text-muted">{item.siteName ?? "선택 대기"}</p>
-                    </div>
-                    <Badge variant={item.analysisStatus === "done" ? "success" : "default"}>
-                      {statusLabel(item.analysisStatus)}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-              {queue.length === 0 && (
-                <p className="text-sm text-muted">업로드된 문서가 없습니다.</p>
-              )}
-            </div>
-          </div>
         </div>
       </AppShell>
     </RequireAdmin>
   );
-}
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    pending: "대기",
-    processing: "분석 중",
-    done: "분석 완료",
-    failed: "실패",
-    needs_review: "선택 대기",
-  };
-  return map[s] ?? s;
 }

@@ -2,11 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   deleteLabProgress,
   listLabProgress,
+  listLabProgressHistory,
+  listLabsMissingProgressForMonth,
   updateLabProgressFields,
 } from "@/lib/data/lab-progress";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const missing = req.nextUrl.searchParams.get("missing") === "1";
+    if (missing) {
+      const month = req.nextUrl.searchParams.get("month") ?? undefined;
+      const rows = await listLabsMissingProgressForMonth(month);
+      return NextResponse.json(rows);
+    }
+
+    const history = req.nextUrl.searchParams.get("history") === "1";
+    if (history) {
+      const labName = req.nextUrl.searchParams.get("labName") ?? undefined;
+      const rows = await listLabProgressHistory(labName);
+      return NextResponse.json(rows);
+    }
+
     const rows = await listLabProgress();
     return NextResponse.json(rows);
   } catch (err) {

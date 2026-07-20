@@ -3,6 +3,7 @@ import {
   applyLabProgressRow,
   bindLabProgressToFund,
 } from "@/lib/data/lab-progress";
+import { resolveReviewByDocumentId } from "@/lib/data/review-queue";
 import type { LabProgressRow } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -23,6 +24,13 @@ export async function POST(req: NextRequest) {
           force: body.force === true,
         })
       : await applyLabProgressRow(body.row, { force: body.force === true });
+
+    if (
+      body.row.documentId &&
+      (result.action === "created" || result.action === "updated")
+    ) {
+      await resolveReviewByDocumentId(body.row.documentId);
+    }
 
     return NextResponse.json(result);
   } catch (err) {

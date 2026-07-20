@@ -1,6 +1,13 @@
 import { getDocuments, sites } from "@/lib/data/seed";
 import { getLabPortfolio, isLabDeleted } from "@/lib/data/lab-portfolio";
 import {
+  isProductMasterDbConfigured,
+  sbBulkUpsertProductMaster,
+  sbDeleteProductMaster,
+  sbListProductMaster,
+  sbUpsertProductMaster,
+} from "@/lib/data/supabase-product-master";
+import {
   isDeletedAddressHint,
   isDeletedLabName,
   isProductDeleted,
@@ -75,6 +82,21 @@ export function invalidateProductCache() {
 
 async function ensure(): Promise<ProductMaster[]> {
   if (!products) {
+    if (isProductMasterDbConfigured()) {
+      try {
+        const dbProducts = await sbListProductMaster();
+        if (dbProducts.length > 0) {
+          products = dbProducts;
+          return products;
+        }
+        const portfolio = await getLabPortfolio();
+        products = seedProducts(portfolio);
+        await sbBulkUpsertProductMaster(products);
+        return products;
+      } catch (err) {
+        console.warn("[product-registry] supabase load failed, seed fallback:", err);
+      }
+    }
     const portfolio = await getLabPortfolio();
     products = seedProducts(portfolio);
   }
@@ -130,6 +152,13 @@ export async function upsertProduct(
         id: input.id,
         updatedAt: now,
       };
+      if (isProductMasterDbConfigured()) {
+        try {
+          await sbUpsertProductMaster(list[idx]);
+        } catch (err) {
+          console.warn("[product-registry] supabase upsert failed:", err);
+        }
+      }
       return list[idx];
     }
   }
@@ -143,10 +172,18 @@ export async function upsertProduct(
     siteId: input.siteId,
     contractAmount: input.contractAmount,
     notes: input.notes,
+    hasProposal: input.hasProposal,
     createdAt: now,
     updatedAt: now,
   };
   list.push(created);
+  if (isProductMasterDbConfigured()) {
+    try {
+      await sbUpsertProductMaster(created);
+    } catch (err) {
+      console.warn("[product-registry] supabase upsert failed:", err);
+    }
+  }
   return created;
 }
 
@@ -155,6 +192,13 @@ export async function deleteProduct(id: string): Promise<ProductMaster | null> {
   const idx = list.findIndex((p) => p.id === id);
   if (idx < 0) return null;
   const [removed] = list.splice(idx, 1);
+  if (isProductMasterDbConfigured()) {
+    try {
+      await sbDeleteProductMaster(removed.id);
+    } catch (err) {
+      console.warn("[product-registry] supabase delete failed:", err);
+    }
+  }
   rememberDeletedMaster({
     productId: removed.id,
     siteId: removed.siteId,

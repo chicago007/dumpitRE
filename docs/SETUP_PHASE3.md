@@ -7,6 +7,8 @@
    - `supabase/migrations/001_initial.sql`
    - `supabase/migrations/002_phase3.sql`
    - `supabase/migrations/003_lab_portfolio.sql`
+   - `supabase/migrations/004_lab_progress.sql`
+   - `supabase/migrations/005_product_review_progress_history.sql`
 3. `.env.local` 설정:
 
 ```env
@@ -82,8 +84,15 @@ curl -X POST http://localhost:3000/api/admin/lab-funds/migrate
 
 ## 7. 공정율 (기성보고서)
 
-1. SQL Editor에서 `supabase/migrations/004_lab_progress.sql` 실행
+1. SQL Editor에서 `004_lab_progress.sql`, `005_product_review_progress_history.sql` 실행
 2. 업로드 → 문서 유형 **공정율** (또는 자동 인식)으로 기성보고서 PDF 업로드
 3. **관리자 → 공정율 현황** (`/admin/progress`)에서 조회 · 「수정」으로 편집
+4. **검토 대기함** (`/admin/review`)에서 매칭·등록 대기 건 처리
 
-동일 랩에 더 오래된 확인일 자료를 올리면 업로드 화면에서 덮어쓰기 여부를 묻습니다.
+확인일(`confirmed_date`)별로 이력이 쌓입니다. 랩당 최신값은 공정율 현황에 표시됩니다.
+더 오래된 확인일 자료를 올리면 업로드 화면에서 덮어쓰기 여부를 묻습니다.
+
+## 8. 상품 마스터 (Supabase)
+
+`005` migration의 `product_master` 테이블에 `/admin` 상품/사업장 등록이 영구 저장됩니다.
+Supabase 연결 시 최초 1회 포트폴리오에서 시드 후 DB를 사용합니다.

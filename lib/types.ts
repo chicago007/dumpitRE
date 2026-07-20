@@ -205,6 +205,36 @@ export interface ProductMaster {
   updatedAt: string;
 }
 
+export type ReviewQueueKind =
+  | "progress_match"
+  | "progress_stale"
+  | "progress_extract_failed"
+  | "proposal_register";
+
+export type ReviewQueueStatus = "pending" | "resolved" | "dismissed";
+
+/** 업로드 후 수동 처리가 필요한 항목 */
+export interface ReviewQueueItem {
+  id: string;
+  kind: ReviewQueueKind;
+  status: ReviewQueueStatus;
+  documentId: string | null;
+  fileName: string;
+  message: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** 이번 달 공정 보고서가 없는 active 랩 */
+export interface MissingProgressLab {
+  labFundId: string;
+  labName: string;
+  fundName: string | null;
+  siteAddress: string | null;
+  lastConfirmedDate: string | null;
+}
+
 /** 제안서 업로드 후 신규/기존 선택용 랩 옵션 */
 export interface ProposalLabOption {
   id: string;

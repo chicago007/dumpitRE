@@ -4,7 +4,11 @@ import { parseGisungReport } from "@/lib/analyzers/gisung-progress";
 import { getLabPortfolio } from "@/lib/data/lab-portfolio";
 import {
   isLabProgressDbConfigured,
-  sbGetLabProgressByLabName,
+  labProgressRowId,
+  pickLatestPerLab,
+  sbGetLabProgressByLabAndDate,
+  sbGetLatestLabProgressByLabName,
+  sbListAllLabProgress,
   sbListLabProgress,
   sbUpsertLabProgress,
 } from "@/lib/data/supabase-lab-progress";
@@ -19,6 +23,7 @@ import type {
   LabProgressApplyResult,
   LabProgressMatchCandidate,
   LabProgressRow,
+  MissingProgressLab,
 } from "@/lib/types";
 
 const PERSIST_PATH = path.join(process.cwd(), ".data", "lab-progress.json");
@@ -82,7 +87,7 @@ function buildRowFromExtract(
   },
   documentId: string | null
 ): LabProgressRow {
-  const id = match.labFundId ?? `lab-progress-${match.labName.replace(/\s+/g, "")}`;
+  const id = labProgressRowId(match.labFundId, match.labName, extracted.reportDate);
   return {
     id,
     labFundId: match.labFundId,
@@ -101,22 +106,42 @@ function buildRowFromExtract(
   };
 }
 
-async function getExistingByLabName(labName: string): Promise<LabProgressRow | null> {
+async function getLatestByLabName(labName: string): Promise<LabProgressRow | null> {
   if (isLabProgressDbConfigured()) {
     try {
-      return await sbGetLabProgressByLabName(labName);
+      return await sbGetLatestLabProgressByLabName(labName);
     } catch (err) {
-      console.warn("[lab-progress] supabase get failed, local fallback:", err);
+      console.warn("[lab-progress] supabase get latest failed, local fallback:", err);
     }
   }
-  return loadLocal().find((r) => r.labName === labName) ?? null;
+  const rows = loadLocal().filter((r) => r.labName === labName);
+  return pickLatestPerLab(rows)[0] ?? null;
+}
+
+async function getByLabAndDate(
+  labName: string,
+  confirmedDate: string | null
+): Promise<LabProgressRow | null> {
+  if (!confirmedDate) return null;
+  if (isLabProgressDbConfigured()) {
+    try {
+      return await sbGetLabProgressByLabAndDate(labName, confirmedDate);
+    } catch (err) {
+      console.warn("[lab-progress] supabase get by date failed, local fallback:", err);
+    }
+  }
+  return (
+    loadLocal().find(
+      (r) => r.labName === labName && r.confirmedDate === confirmedDate
+    ) ?? null
+  );
 }
 
 async function persistRow(row: LabProgressRow): Promise<LabProgressRow> {
   if (isLabProgressDbConfigured()) {
     try {
       const saved = await sbUpsertLabProgress(row);
-      const local = loadLocal().filter((r) => r.id !== saved.id && r.labName !== saved.labName);
+      const local = loadLocal().filter((r) => r.id !== saved.id);
       local.push(saved);
       saveLocal(local);
       return saved;
@@ -124,23 +149,102 @@ async function persistRow(row: LabProgressRow): Promise<LabProgressRow> {
       console.warn("[lab-progress] supabase upsert failed, local only:", err);
     }
   }
-  const local = loadLocal().filter((r) => r.id !== row.id && r.labName !== row.labName);
+  const local = loadLocal().filter((r) => r.id !== row.id);
   local.push(row);
   saveLocal(local);
   return row;
+}
+
+async function loadAllProgressRows(): Promise<LabProgressRow[]> {
+  if (isLabProgressDbConfigured()) {
+    try {
+      return await sbListAllLabProgress();
+    } catch (err) {
+      console.warn("[lab-progress] supabase list all failed, local fallback:", err);
+    }
+  }
+  return loadLocal();
 }
 
 export async function listLabProgress(): Promise<LabProgressRow[]> {
   if (isLabProgressDbConfigured()) {
     try {
       const rows = await sbListLabProgress();
-      saveLocal(rows);
+      saveLocal(await sbListAllLabProgress());
       return rows;
     } catch (err) {
       console.warn("[lab-progress] supabase list failed, local fallback:", err);
     }
   }
-  return [...loadLocal()].sort((a, b) =>
+  return pickLatestPerLab(loadLocal()).sort((a, b) =>
+    b.labName.localeCompare(a.labName, "ko", { numeric: true })
+  );
+}
+
+/** 랩별 공정 이력 (확인일 내림차순) */
+export async function listLabProgressHistory(
+  labName?: string
+): Promise<LabProgressRow[]> {
+  const all = await loadAllProgressRows();
+  const filtered = labName ? all.filter((r) => r.labName === labName) : all;
+  return filtered.sort((a, b) => {
+    const d = compareDate(b.confirmedDate, a.confirmedDate);
+    if (d !== 0) return d;
+    return b.labName.localeCompare(a.labName, "ko", { numeric: true });
+  });
+}
+
+function monthPrefix(isoMonth: string): string {
+  return isoMonth.slice(0, 7);
+}
+
+function currentMonthPrefix(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+/** active 랩 중 지정 월(YYYY-MM)에 confirmed_date 보고가 없는 랩 */
+export async function listLabsMissingProgressForMonth(
+  month: string = currentMonthPrefix()
+): Promise<MissingProgressLab[]> {
+  const portfolio = await getLabPortfolio();
+  const funds = (portfolio?.funds ?? []).filter((f) => f.status === "active");
+  const all = await loadAllProgressRows();
+  const monthRows = all.filter(
+    (r) => r.confirmedDate && monthPrefix(r.confirmedDate) === month
+  );
+
+  const reportedByFundId = new Set(
+    monthRows.map((r) => r.labFundId).filter(Boolean) as string[]
+  );
+  const reportedByLabName = new Set(
+    monthRows.map((r) => r.labName.replace(/\s+/g, "").toLowerCase())
+  );
+
+  const latestByLab = new Map<string, LabProgressRow>();
+  for (const row of pickLatestPerLab(all)) {
+    latestByLab.set(row.labName.replace(/\s+/g, "").toLowerCase(), row);
+  }
+
+  const missing: MissingProgressLab[] = [];
+  for (const fund of funds) {
+    const labKey = fund.name.replace(/\s+/g, "").toLowerCase();
+    const reported =
+      reportedByFundId.has(fund.id) || reportedByLabName.has(labKey);
+    if (reported) continue;
+    const latest = latestByLab.get(labKey);
+    missing.push({
+      labFundId: fund.id,
+      labName: fund.name,
+      fundName: fund.fundName,
+      siteAddress: fund.siteAddress,
+      lastConfirmedDate: latest?.confirmedDate ?? null,
+    });
+  }
+
+  return missing.sort((a, b) =>
     b.labName.localeCompare(a.labName, "ko", { numeric: true })
   );
 }
@@ -224,52 +328,71 @@ export async function applyLabProgressRow(
   row: LabProgressRow,
   options?: { force?: boolean }
 ): Promise<LabProgressApplyResult> {
-  const existing = await getExistingByLabName(row.labName);
+  const latest = await getLatestByLabName(row.labName);
+  const sameDate = row.confirmedDate
+    ? await getByLabAndDate(row.labName, row.confirmedDate)
+    : null;
   const force = options?.force === true;
 
   let toSave = row;
 
-  // 필증만 올린 경우: 기존 공정율은 유지하고 특이사항·확인일만 병합
-  if (existing && isPermitOnlyRow(row)) {
+  // 필증만 올린 경우: 동일 확인일 또는 최신 행에 특이사항 병합
+  if (isPermitOnlyRow(row)) {
+    const target = sameDate ?? latest;
+    if (target) {
+      toSave = {
+        ...target,
+        specialNotes: mergeSpecialNotes(target.specialNotes, row.specialNotes),
+        confirmedDate: row.confirmedDate ?? target.confirmedDate,
+        sourceFileName: row.sourceFileName ?? target.sourceFileName,
+        documentId: row.documentId ?? target.documentId,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  } else if (sameDate) {
+    // 동일 확인일 재업로드 → 해당 스냅샷 갱신
     toSave = {
-      ...existing,
-      specialNotes: mergeSpecialNotes(existing.specialNotes, row.specialNotes),
-      confirmedDate: row.confirmedDate ?? existing.confirmedDate,
-      sourceFileName: row.sourceFileName ?? existing.sourceFileName,
-      documentId: row.documentId ?? existing.documentId,
-      updatedAt: new Date().toISOString(),
+      ...row,
+      id: sameDate.id,
+      specialNotes: mergeSpecialNotes(row.specialNotes, sameDate.specialNotes),
     };
-  } else if (existing && !force) {
-    const cmp = compareDate(row.confirmedDate, existing.confirmedDate);
+  } else if (latest && !force && row.confirmedDate) {
+    const cmp = compareDate(row.confirmedDate, latest.confirmedDate);
     if (cmp < 0) {
       return {
         action: "stale",
-        message: `현재자료가 더 최신자료입니다. (보관 ${existing.confirmedDate ?? "—"} / 업로드 ${row.confirmedDate ?? "—"}) 업데이트 할까요?`,
+        message: `현재자료가 더 최신자료입니다. (보관 ${latest.confirmedDate ?? "—"} / 업로드 ${row.confirmedDate ?? "—"}) 업데이트 할까요?`,
         row,
-        existing,
+        existing: latest,
       };
     }
-    // 기성 업로드 시 기존 필증 특이사항 유지
-    if (existing.specialNotes && /필증/.test(existing.specialNotes)) {
+    if (latest.specialNotes && /필증/.test(latest.specialNotes)) {
       toSave = {
         ...row,
-        specialNotes: mergeSpecialNotes(row.specialNotes, existing.specialNotes),
+        specialNotes: mergeSpecialNotes(row.specialNotes, latest.specialNotes),
       };
     }
+  } else if (latest?.specialNotes && /필증/.test(latest.specialNotes) && !sameDate) {
+    toSave = {
+      ...row,
+      specialNotes: mergeSpecialNotes(row.specialNotes, latest.specialNotes),
+    };
   }
 
   const saved = await persistRow(toSave);
+  const isNewSnapshot = !sameDate && !latest;
+  const isUpdatedSnapshot = Boolean(sameDate || (latest && !isNewSnapshot));
   return {
-    action: existing ? "updated" : "created",
-    message: existing
-      ? isPermitOnlyRow(row)
-        ? `${saved.labName} 특이사항에 필증 정보를 반영했습니다.`
-        : `${saved.labName} 공정율을 갱신했습니다.`
-      : isPermitOnlyRow(row)
-        ? `${saved.labName} 필증 정보를 등록했습니다.`
-        : `${saved.labName} 공정율을 등록했습니다.`,
+    action: isNewSnapshot ? "created" : isUpdatedSnapshot ? "updated" : "created",
+    message: isPermitOnlyRow(row)
+      ? `${saved.labName} 특이사항에 필증 정보를 반영했습니다.`
+      : sameDate
+        ? `${saved.labName} ${saved.confirmedDate ?? ""} 공정율을 갱신했습니다.`
+        : latest
+          ? `${saved.labName} 공정율 이력을 추가했습니다. (${saved.confirmedDate ?? "—"})`
+          : `${saved.labName} 공정율을 등록했습니다.`,
     row: saved,
-    existing,
+    existing: latest,
   };
 }
 
@@ -292,7 +415,7 @@ export async function bindLabProgressToFund(params: {
 
   const bound: LabProgressRow = {
     ...params.row,
-    id: fund.id,
+    id: labProgressRowId(fund.id, fund.name, params.row.confirmedDate),
     labFundId: fund.id,
     labName: fund.name,
     fundName: fund.fundName,

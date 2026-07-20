@@ -34,6 +34,11 @@ import {
   uploadToGoogleDrive,
 } from "@/lib/google-drive/client";
 import { saveUploadLocally } from "@/lib/storage/local";
+import {
+  enqueueProgressReview,
+  enqueueProposalReview,
+  resolveReviewByDocumentId,
+} from "@/lib/data/review-queue";
 import type { DocumentRecord, DocumentType, LabProgressApplyResult, ProposalRegistrationPrompt } from "@/lib/types";
 
 function resolveEffectiveType(typeParam: DocumentType, fileName: string, isPdf: boolean): DocumentType {
@@ -121,6 +126,12 @@ export async function POST(req: NextRequest) {
           extractionWarning,
         });
         siteName = parsed.siteName ?? registration.suggestedLabName;
+        await enqueueProposalReview(
+          file.name,
+          docId,
+          "신규/기존 부동산랩을 선택한 뒤 반영해 주세요.",
+          { parsed, registration }
+        );
       } else if (inferredType === "progress_report") {
         const force = form.get("force") === "true";
         // 표지 일자 숫자가 null-byte로 깨진 PDF(예: 72호 인계동) → Gemini로 복구
@@ -166,6 +177,14 @@ export async function POST(req: NextRequest) {
         } else {
           analysisStatus = "done";
         }
+
+        const extractionFailed =
+          labProgress.row?.actualProgressPct == null &&
+          labProgress.row?.plannedProgressPct == null &&
+          !labProgress.row?.specialNotes?.includes("필증");
+        await enqueueProgressReview(file.name, docId, labProgress, {
+          extractionFailed,
+        });
 
         // 레거시 site 연동 (선택)
         const parsed = parseCostCmReport(pdfText, file.name);
@@ -217,6 +236,15 @@ export async function POST(req: NextRequest) {
         warnings.push(labProgress.message);
       } else {
         analysisStatus = "done";
+      }
+      if (labProgress) {
+        const extractionFailed =
+          labProgress.row?.actualProgressPct == null &&
+          labProgress.row?.plannedProgressPct == null &&
+          !labProgress.row?.specialNotes?.includes("필증");
+        await enqueueProgressReview(file.name, docId, labProgress, {
+          extractionFailed,
+        });
       }
     } else {
       siteId = resolveSiteId(null, file.name);
@@ -329,7 +357,7 @@ export async function POST(req: NextRequest) {
     driveUpload,
     redirectTo:
       docType === "management_status" && !registration
-        ? "/management"
+        ? "/admin/portfolio"
         : docType === "progress_report" &&
             (labProgress?.action === "created" || labProgress?.action === "updated")
           ? "/admin/progress"

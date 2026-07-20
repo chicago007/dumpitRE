@@ -68,25 +68,86 @@ export function isLabProgressDbConfigured(): boolean {
   return isSupabaseServerConfigured();
 }
 
-export async function sbListLabProgress(): Promise<LabProgressRow[]> {
-  const { data, error } = await db()
-    .from("lab_progress")
-    .select("*")
-    .order("lab_name", { ascending: false });
-  if (error) throw error;
-  const rows = ((data ?? []) as LabProgressDbRow[]).map(rowToLabProgress);
-  return rows.sort((a, b) =>
+/** 랩·확인일 기준 안정적 id (동일 보고서 재업로드 시 덮어쓰기) */
+export function labProgressRowId(
+  labFundId: string | null,
+  labName: string,
+  confirmedDate: string | null
+): string {
+  const key = (labFundId ?? labName.replace(/\s+/g, "")).slice(0, 100);
+  if (confirmedDate) return `${key}--${confirmedDate}`;
+  return `${key}--nodate--${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function sortByLabThenDate(a: LabProgressRow, b: LabProgressRow): number {
+  const lab = b.labName.localeCompare(a.labName, "ko", { numeric: true });
+  if (lab !== 0) return lab;
+  return compareDateStr(b.confirmedDate, a.confirmedDate);
+}
+
+function compareDateStr(a: string | null, b: string | null): number {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+  return a.localeCompare(b);
+}
+
+/** 확인일 기준 랩별 최신 1건 */
+export function pickLatestPerLab(rows: LabProgressRow[]): LabProgressRow[] {
+  const byLab = new Map<string, LabProgressRow>();
+  for (const row of [...rows].sort(sortByLabThenDate)) {
+    const key = row.labName.replace(/\s+/g, "").toLowerCase();
+    if (!byLab.has(key)) byLab.set(key, row);
+  }
+  return [...byLab.values()].sort((a, b) =>
     b.labName.localeCompare(a.labName, "ko", { numeric: true })
   );
 }
 
-export async function sbGetLabProgressByLabName(
+export async function sbListAllLabProgress(): Promise<LabProgressRow[]> {
+  const { data, error } = await db()
+    .from("lab_progress")
+    .select("*")
+    .order("confirmed_date", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return ((data ?? []) as LabProgressDbRow[]).map(rowToLabProgress);
+}
+
+export async function sbListLabProgress(): Promise<LabProgressRow[]> {
+  const all = await sbListAllLabProgress();
+  return pickLatestPerLab(all);
+}
+
+export async function sbGetLatestLabProgressByLabName(
   labName: string
 ): Promise<LabProgressRow | null> {
   const { data, error } = await db()
     .from("lab_progress")
     .select("*")
     .eq("lab_name", labName)
+    .order("confirmed_date", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToLabProgress(data as LabProgressDbRow) : null;
+}
+
+export async function sbGetLabProgressByLabName(
+  labName: string
+): Promise<LabProgressRow | null> {
+  return sbGetLatestLabProgressByLabName(labName);
+}
+
+export async function sbGetLabProgressByLabAndDate(
+  labName: string,
+  confirmedDate: string | null
+): Promise<LabProgressRow | null> {
+  if (!confirmedDate) return null;
+  const { data, error } = await db()
+    .from("lab_progress")
+    .select("*")
+    .eq("lab_name", labName)
+    .eq("confirmed_date", confirmedDate)
     .maybeSingle();
   if (error) throw error;
   return data ? rowToLabProgress(data as LabProgressDbRow) : null;

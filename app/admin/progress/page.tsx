@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdmin } from "@/components/auth/require-admin";
 import { Button } from "@/components/ui/button";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
-import type { LabProgressRow } from "@/lib/types";
+import type { LabProgressRow, MissingProgressLab } from "@/lib/types";
 
 type RowEdit = LabProgressRow & { dirty?: boolean };
 
@@ -28,25 +28,33 @@ export default function AdminProgressPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [missingLabs, setMissingLabs] = useState<MissingProgressLab[]>([]);
 
   const refresh = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch("/api/lab-progress", { cache: "no-store" })
-      .then(async (r) => {
+    Promise.all([
+      fetch("/api/lab-progress", { cache: "no-store" }).then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error ?? "불러오기 실패");
         return data as LabProgressRow[];
-      })
-      .then((data) =>
+      }),
+      fetch("/api/lab-progress?missing=1", { cache: "no-store" }).then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) return [] as MissingProgressLab[];
+        return data as MissingProgressLab[];
+      }),
+    ])
+      .then(([progress, missing]) => {
         setRows(
-          (Array.isArray(data) ? data : [])
+          (Array.isArray(progress) ? progress : [])
             .map((r) => ({ ...r }))
             .sort((a, b) =>
               b.labName.localeCompare(a.labName, "ko", { numeric: true })
             )
-        )
-      )
+        );
+        setMissingLabs(Array.isArray(missing) ? missing : []);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "오류"))
       .finally(() => setLoading(false));
   }, []);
@@ -165,6 +173,12 @@ export default function AdminProgressPage() {
             >
               기성보고서 업로드
             </Link>
+            <Link
+              href="/admin/review"
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-card hover:bg-accent/5"
+            >
+              검토 대기함
+            </Link>
           </div>
         }
       >
@@ -177,6 +191,20 @@ export default function AdminProgressPage() {
           </p>
 
           {message ? <p className="text-xs text-accent">{message}</p> : null}
+          {!loading && missingLabs.length > 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm">
+              <p className="font-medium text-amber-900">
+                이번 달 기성 보고 미제출 ({missingLabs.length}곳)
+              </p>
+              <p className="mt-1 text-xs text-amber-800/90">
+                {missingLabs
+                  .slice(0, 12)
+                  .map((l) => l.labName)
+                  .join(", ")}
+                {missingLabs.length > 12 ? ` 외 ${missingLabs.length - 12}곳` : ""}
+              </p>
+            </div>
+          ) : null}
           {loading ? (
             <p className="text-sm text-muted">불러오는 중…</p>
           ) : error ? (

@@ -175,7 +175,7 @@ export function ProposalRegistrationPanel({
             (regMode === "new" && !newLabName.trim())
           }
         >
-          {saving ? "반영 중…" : "② 저장하고 공정율 현황으로"}
+          {saving ? "반영 중…" : "② 저장하고 사업장관리로"}
         </Button>
       </div>
     </div>

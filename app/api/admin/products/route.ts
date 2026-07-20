@@ -14,6 +14,7 @@ import {
   upsertLabFundFromProposal,
 } from "@/lib/data/lab-portfolio";
 import { persistProposal } from "@/lib/data/repository";
+import { resolveReviewByDocumentId } from "@/lib/data/review-queue";
 import {
   lockLabNameFromFileName,
   compactSiteAddress,
@@ -147,6 +148,7 @@ export async function POST(req: NextRequest) {
       location: master.product.siteAddress,
       siteName: master.product.siteName,
     });
+    if (documentId) await resolveReviewByDocumentId(documentId);
     return NextResponse.json({
       product: master.product,
       applied: [...master.applied, ...(applyResult.applied ?? [])],
