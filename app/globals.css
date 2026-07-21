@@ -53,17 +53,6 @@ body {
   text-decoration: underline;
 }
 
-.im-gradient-bg {
-  background: linear-gradient(90deg, #00c7a9 0%, #e2f15e 100%);
-}
-
-.im-gradient-text {
-  background: linear-gradient(90deg, #00c7a9 0%, #e2f15e 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
 .shadow-card {
   box-shadow:
     0 1px 2px rgb(0 199 169 / 0.06),

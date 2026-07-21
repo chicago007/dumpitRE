@@ -224,13 +224,13 @@ export function Sidebar({
             LH/SH/GH 매입약정
           </p>
           <p className="mt-0.5 flex items-baseline gap-1 whitespace-nowrap">
-            <span className="im-gradient-text text-[15px] font-bold tracking-tight">
+            <span className="text-accent text-[15px] font-bold tracking-tight">
               부동산랩 사업장관리
             </span>
             <span className="shrink-0 text-[11px] font-medium text-slate-400">{APP_VERSION}</span>
           </p>
         </Link>
-        <div className="im-gradient-bg mt-3 h-1 w-12 rounded-full opacity-80" aria-hidden />
+        <div className="mt-3 h-1 w-12 rounded-full bg-accent opacity-80" aria-hidden />
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 py-3">
         <div className="flex flex-col gap-0.5">
