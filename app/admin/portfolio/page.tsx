@@ -184,6 +184,7 @@ export default function AdminPortfolioManagePage() {
           maturityDate: row.maturityDate,
           loanMaturityDate: row.loanMaturityDate,
           repaymentDate: row.repaymentDate,
+          earlyRepaymentDate: row.earlyRepaymentDate,
           setupAmount: row.setupAmount,
           balance: row.balance,
           interestRate: row.interestRate,
@@ -328,13 +329,12 @@ export default function AdminPortfolioManagePage() {
                     <th className={head}>수수료(%)</th>
                     <th className={head}>설정액(억)</th>
                     <th className={head}>잔액(억)</th>
+                    <th className={head}>비고</th>
                     <th className={head}>설정일</th>
+                    <th className={head}>중도상환일</th>
                     <th className={head}>펀드만기일</th>
                     <th className={head}>대출만기일</th>
                     <th className={head}>상환일</th>
-                    <th className={head}>실행공정(%)</th>
-                    <th className={head}>계획공정(%)</th>
-                    <th className={head}>비고</th>
                     {Array.from({ length: maxRound }, (_, i) => (
                       <th key={i + 1} className={head}>
                         {i + 1}차지급
@@ -467,9 +467,21 @@ export default function AdminPortfolioManagePage() {
                             }
                           />
                         </td>
+                        <td className="border border-border p-0">
+                          <input
+                            className={`${fieldClass} w-40`}
+                            value={row.note ?? ""}
+                            readOnly={!editing}
+                            onChange={(e) =>
+                              editing &&
+                              patchRow(row.id, { note: e.target.value || null })
+                            }
+                          />
+                        </td>
                         {(
                           [
                             ["setupDate", row.setupDate],
+                            ["earlyRepaymentDate", row.earlyRepaymentDate],
                             ["maturityDate", row.maturityDate],
                             ["loanMaturityDate", row.loanMaturityDate],
                             ["repaymentDate", row.repaymentDate],
@@ -488,47 +500,6 @@ export default function AdminPortfolioManagePage() {
                             />
                           </td>
                         ))}
-                        <td className="border border-border p-0">
-                          <input
-                            className={`${fieldClass} w-16`}
-                            value={row.actualProgressPct ?? ""}
-                            readOnly={!editing}
-                            onChange={(e) =>
-                              editing &&
-                              patchRow(row.id, {
-                                actualProgressPct: e.target.value
-                                  ? Number(e.target.value)
-                                  : null,
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="border border-border p-0">
-                          <input
-                            className={`${fieldClass} w-16`}
-                            value={row.plannedProgressPct ?? ""}
-                            readOnly={!editing}
-                            onChange={(e) =>
-                              editing &&
-                              patchRow(row.id, {
-                                plannedProgressPct: e.target.value
-                                  ? Number(e.target.value)
-                                  : null,
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="border border-border p-0">
-                          <input
-                            className={`${fieldClass} w-40`}
-                            value={row.note ?? ""}
-                            readOnly={!editing}
-                            onChange={(e) =>
-                              editing &&
-                              patchRow(row.id, { note: e.target.value || null })
-                            }
-                          />
-                        </td>
                         {Array.from({ length: maxRound }, (_, i) => (
                           <td key={i + 1} className="border border-border p-0">
                             <input

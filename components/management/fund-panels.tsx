@@ -224,9 +224,9 @@ export function LabRoundDetail({
     { label: "금리", value: formatRate(fund.interestRate) },
     { label: "수수료율", value: formatRate(fund.feeRate) },
     { label: "설정일", value: v(fund.setupDate) },
+    { label: "중도상환(예정)일", value: v(fund.earlyRepaymentDate) },
     { label: "대출만기일", value: v(fund.loanMaturityDate) },
     { label: "펀드만기일", value: v(fund.maturityDate) },
-    { label: "상환일", value: v(fund.repaymentDate) },
     { label: "신탁사", value: v(fund.trustCompany) },
     { label: "신탁방식", value: v(fund.trustType) },
     { label: "시행사", value: fund.developer },
@@ -245,6 +245,7 @@ export function LabRoundDetail({
     { label: "펀드코드", value: fund.fundCode },
   ].map(({ label, value }) => value?.trim() || label);
   const siteAddress = fund.siteAddress?.trim();
+  const addressLines = splitDisplayLines(siteAddress);
   const businessDesc = fund.businessDesc?.trim() || "사업내용";
   const hasMap = Boolean(siteAddress);
   const mapUrl = siteAddress
@@ -276,26 +277,40 @@ export function LabRoundDetail({
               >
                 {fund.name}
               </h3>
-              <span className="text-xs text-slate-500">{codeParts.join(" / ")}</span>
+              <span className="text-xs font-normal text-slate-500">
+                {codeParts.join(" / ")}
+              </span>
             </div>
             <p className="mt-1 text-sm text-slate-700 break-words">
-              {hasMap ? (
+              {!hasMap ? (
+                <span>사업장 주소</span>
+              ) : (
                 <button
                   type="button"
                   onClick={() => setMapOpen(true)}
-                  className="font-medium text-link underline decoration-dotted underline-offset-2"
+                  className="font-medium text-link underline decoration-dotted underline-offset-2 text-left"
                   title="지도에서 주소 보기"
                 >
-                  {siteAddress}
+                  {addressLines.map((line, i) => (
+                    <span key={i} className="block leading-snug">
+                      {line}
+                    </span>
+                  ))}
                 </button>
-              ) : (
-                siteAddress || "사업장 주소"
               )}
               {" / "}
               {businessDesc}
             </p>
           </div>
           <FundProgressBadge fund={fund} variant="header" />
+          {fund.repaymentDate?.trim() ? (
+            <div className="flex h-16 shrink-0 flex-col justify-center">
+              <span className="text-xs font-normal leading-none text-slate-500">상환일</span>
+              <span className="mt-1 text-xs font-normal tabular-nums text-slate-500">
+                {fund.repaymentDate.trim()}
+              </span>
+            </div>
+          ) : null}
         </div>
         {statusBadge(fund.status)}
       </div>
@@ -441,11 +456,18 @@ export function LabRoundCard({
   );
 }
 
+/** 복수 값: 줄바꿈 또는 ", "(쉼표+공백)로 분리. 천단위 쉼표(1,291)는 유지 */
 function splitDisplayLines(raw: string | null | undefined): string[] {
   const s = raw?.trim();
-  if (!s) return ["—"];
-  const lines = s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  return lines.length ? lines : ["—"];
+  if (!s || s === "—") return ["—"];
+  const byNewline = s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const parts = byNewline.flatMap((line) =>
+    line
+      .split(/,\s+/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+  );
+  return parts.length ? parts : ["—"];
 }
 
 function Item({ label, value }: { label: string; value: string | null | undefined }) {

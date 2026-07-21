@@ -37,7 +37,7 @@ npm run dev
    - `supabase/migrations/002_phase3.sql`
 3. `.env.local` 설정 (`.env.example` 참고)
 
-상세: [`docs/SETUP_PHASE3.md`](docs/SETUP_PHASE3.md)
+상세: [`docs/SETUP_PHASE3.md`](docs/SETUP_PHASE3.md) · [`docs/DEVELOPMENT_NOTES.md`](docs/DEVELOPMENT_NOTES.md) · [`docs/CHANGELOG.md`](docs/CHANGELOG.md)
 
 환경변수 없이도 **데모 모드**로 동작합니다.
 

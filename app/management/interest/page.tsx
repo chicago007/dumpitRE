@@ -11,13 +11,15 @@ import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
 
 type ViewMode = "list" | "calendar";
 
+type MaturityKind = "early" | "loan" | "fund";
+
 type DateItem = {
   key: string;
   fundName: string;
   siteAddress: string | null;
   date: string;
   label: string;
-  kind: "distribution" | "maturity";
+  kind: "distribution" | MaturityKind;
   raw?: string;
 };
 
@@ -26,7 +28,7 @@ type CalendarEvent = {
   date: string;
   fundName: string;
   label: string;
-  kind: "distribution" | "maturity";
+  kind: "distribution" | MaturityKind;
 };
 
 function todayStart() {
@@ -67,28 +69,47 @@ function buildDistributionDates(funds: LabFund[]): DateItem[] {
 function buildMaturityDates(funds: LabFund[]): DateItem[] {
   const items: DateItem[] = [];
   for (const fund of funds) {
-    if (fund.maturityDate && isOnOrAfterToday(fund.maturityDate)) {
+    if (fund.earlyRepaymentDate && isOnOrAfterToday(fund.earlyRepaymentDate)) {
       items.push({
-        key: `${fund.id}-maturity-${fund.maturityDate}`,
+        key: `${fund.id}-early-${fund.earlyRepaymentDate}`,
         fundName: fund.name,
         siteAddress: fund.siteAddress,
-        date: fund.maturityDate,
-        label: "만기",
-        kind: "maturity",
+        date: fund.earlyRepaymentDate,
+        label: "중도상환",
+        kind: "early",
       });
     }
-    if (
-      fund.loanMaturityDate &&
-      isOnOrAfterToday(fund.loanMaturityDate) &&
-      fund.loanMaturityDate !== fund.maturityDate
-    ) {
+    if (fund.loanMaturityDate && isOnOrAfterToday(fund.loanMaturityDate)) {
       items.push({
         key: `${fund.id}-loan-${fund.loanMaturityDate}`,
         fundName: fund.name,
         siteAddress: fund.siteAddress,
         date: fund.loanMaturityDate,
-        label: "대출 만기일",
-        kind: "maturity",
+        label: "대출만기",
+        kind: "loan",
+      });
+    }
+    if (
+      fund.maturityDate &&
+      isOnOrAfterToday(fund.maturityDate) &&
+      fund.maturityDate !== fund.loanMaturityDate
+    ) {
+      items.push({
+        key: `${fund.id}-fund-${fund.maturityDate}`,
+        fundName: fund.name,
+        siteAddress: fund.siteAddress,
+        date: fund.maturityDate,
+        label: "펀드만기",
+        kind: "fund",
+      });
+    } else if (fund.maturityDate && isOnOrAfterToday(fund.maturityDate)) {
+      items.push({
+        key: `${fund.id}-fund-${fund.maturityDate}`,
+        fundName: fund.name,
+        siteAddress: fund.siteAddress,
+        date: fund.maturityDate,
+        label: "펀드만기",
+        kind: "fund",
       });
     }
   }
@@ -112,10 +133,20 @@ function buildMonthCells(year: number, month: number) {
   return cells;
 }
 
+const KIND_STYLE: Record<MaturityKind | "distribution", string> = {
+  distribution: "bg-accent/15 text-accent",
+  early: "bg-amber-100 text-amber-900",
+  loan: "bg-blue-100 text-blue-900",
+  fund: "bg-emerald-100 text-emerald-900",
+};
+
 export default function InterestPage() {
   const [portfolio, setPortfolio] = useState<LabPortfolioSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [showEarly, setShowEarly] = useState(true);
+  const [showLoan, setShowLoan] = useState(true);
+  const [showFund, setShowFund] = useState(true);
   const now = todayStart();
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
 
@@ -138,7 +169,17 @@ export default function InterestPage() {
   );
 
   const distributions = useMemo(() => buildDistributionDates(funds), [funds]);
-  const maturities = useMemo(() => buildMaturityDates(funds), [funds]);
+  const allMaturities = useMemo(() => buildMaturityDates(funds), [funds]);
+  const maturities = useMemo(
+    () =>
+      allMaturities.filter((m) => {
+        if (m.kind === "early") return showEarly;
+        if (m.kind === "loan") return showLoan;
+        if (m.kind === "fund") return showFund;
+        return true;
+      }),
+    [allMaturities, showEarly, showLoan, showFund]
+  );
   const maxRound = useMemo(() => {
     const rounds = funds.flatMap((f) => f.interestPayments.map((p) => p.round));
     return Math.max(1, ...(rounds.length ? rounds : [0]));
@@ -181,21 +222,22 @@ export default function InterestPage() {
     [cursor.year, cursor.month]
   );
 
-  const viewTabs = (
-    <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+  const kindToggle = (
+    <div className="flex flex-wrap gap-1 rounded-lg bg-neutral-100 p-1">
       {(
         [
-          ["list", "빠른 날짜순"],
-          ["calendar", "달력"],
+          ["early", "중도상환", showEarly, setShowEarly],
+          ["loan", "대출만기", showLoan, setShowLoan],
+          ["fund", "펀드만기", showFund, setShowFund],
         ] as const
-      ).map(([id, label]) => (
+      ).map(([id, label, active, setActive]) => (
         <button
           key={id}
           type="button"
-          onClick={() => setViewMode(id)}
+          onClick={() => setActive(!active)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-            viewMode === id
+            "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+            active
               ? "bg-white text-foreground shadow-sm"
               : "text-muted hover:text-foreground"
           )}
@@ -203,6 +245,34 @@ export default function InterestPage() {
           {label}
         </button>
       ))}
+    </div>
+  );
+
+  const viewTabs = (
+    <div className="flex flex-wrap items-center gap-2">
+      {kindToggle}
+      <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+        {(
+          [
+            ["list", "빠른 날짜순"],
+            ["calendar", "달력"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setViewMode(id)}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              viewMode === id
+                ? "bg-white text-foreground shadow-sm"
+                : "text-muted hover:text-foreground"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -230,16 +300,16 @@ export default function InterestPage() {
             {viewMode === "list" ? (
               <HorizontalScroll>
                 <div className="grid min-w-[640px] grid-cols-2 gap-4">
-                <DateList
-                  title="분배금 지급일"
-                  items={distributions}
-                  empty="예정된 분배금 지급일이 없습니다."
-                />
-                <DateList
-                  title="만기일"
-                  items={maturities}
-                  empty="예정된 만기일이 없습니다."
-                />
+                  <DateList
+                    title="분배금 지급일"
+                    items={distributions}
+                    empty="예정된 분배금 지급일이 없습니다."
+                  />
+                  <DateList
+                    title="만기·중도상환일"
+                    items={maturities}
+                    empty="예정된 만기·중도상환일이 없습니다."
+                  />
                 </div>
               </HorizontalScroll>
             ) : (
@@ -260,7 +330,7 @@ export default function InterestPage() {
             <section className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
               <div className="border-b border-border px-4 py-3">
                 <p className="text-xs text-muted">
-                  회차별 스케줄 (설정일 → 대출만기일 → 만기일 → 상환일 → 1차…)
+                  회차별 스케줄 (설정일 → 중도상환일 → 대출만기일 → 펀드만기일 → 상환일 → 1차…)
                 </p>
               </div>
               <HorizontalScroll className="max-h-[min(60vh,640px)] overflow-y-auto">
@@ -274,10 +344,13 @@ export default function InterestPage() {
                         설정일
                       </th>
                       <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
+                        중도상환일
+                      </th>
+                      <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         대출만기일
                       </th>
                       <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
-                        만기일
+                        펀드만기일
                       </th>
                       <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-100 px-3 py-3 font-medium shadow-[inset_0_-1px_0_0_var(--color-border)]">
                         상환일
@@ -301,6 +374,7 @@ export default function InterestPage() {
                             {f.name}
                           </td>
                           <ScheduleCell date={f.setupDate} />
+                          <ScheduleCell date={f.earlyRepaymentDate} />
                           <ScheduleCell date={f.loanMaturityDate} />
                           <ScheduleCell date={f.maturityDate} />
                           <ScheduleCell date={f.repaymentDate} />
@@ -379,12 +453,18 @@ function CalendarBoard({
             오늘
           </button>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-muted">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-accent" /> 분배금
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-success" /> 만기
+            <span className="h-2 w-2 rounded-full bg-amber-500" /> 중도상환
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-500" /> 대출만기
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" /> 펀드만기
           </span>
         </div>
       </div>
@@ -421,22 +501,20 @@ function CalendarBoard({
                 {cell.day}
               </p>
               <div className="space-y-0.5">
-                {events.slice(0, 3).map((e) => (
+                {events.slice(0, 4).map((e) => (
                   <div
                     key={e.key}
                     className={cn(
                       "truncate rounded px-1 py-0.5 text-[10px] leading-tight",
-                      e.kind === "distribution"
-                        ? "bg-blue-50 text-accent"
-                        : "bg-green-50 text-success"
+                      KIND_STYLE[e.kind]
                     )}
                     title={`${e.fundName} · ${e.label}`}
                   >
-                    {e.fundName} {e.label}
+                    {e.fundName.replace(/^부동산랩\s*/, "")} {e.label}
                   </div>
                 ))}
-                {events.length > 3 ? (
-                  <p className="px-1 text-[10px] text-muted">+{events.length - 3}</p>
+                {events.length > 4 ? (
+                  <p className="text-[10px] text-muted">+{events.length - 4}</p>
                 ) : null}
               </div>
             </div>
@@ -444,27 +522,6 @@ function CalendarBoard({
         })}
       </div>
     </div>
-  );
-}
-
-function ScheduleCell({
-  date,
-  display,
-}: {
-  date: string | null | undefined;
-  display?: string | null;
-}) {
-  if (!date && !display) {
-    return (
-      <td className="border-t border-border px-3 py-2.5 text-xs whitespace-nowrap text-muted">—</td>
-    );
-  }
-  const text = display ?? date ?? "—";
-  const upcoming = date ? isOnOrAfterToday(date) : false;
-  return (
-    <td className="border-t border-border px-3 py-2.5 text-xs whitespace-nowrap tabular-nums">
-      <span className={upcoming ? "font-medium text-accent" : "text-muted"}>{text}</span>
-    </td>
   );
 }
 
@@ -478,33 +535,44 @@ function DateList({
   empty: string;
 }) {
   return (
-    <div className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
+    <section className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-0.5 text-xs text-muted">{items.length}건</p>
       </div>
-      <div className="max-h-[36rem] divide-y divide-border overflow-y-auto">
-        {items.length === 0 ? (
-          <p className="p-4 text-sm text-muted">{empty}</p>
-        ) : (
-          items.map((item) => (
-            <div
-              key={item.key}
-              className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
-            >
+      {items.length === 0 ? (
+        <p className="p-4 text-sm text-muted">{empty}</p>
+      ) : (
+        <ul className="max-h-[min(50vh,420px)] divide-y divide-border overflow-y-auto">
+          {items.map((item) => (
+            <li key={item.key} className="flex items-start justify-between gap-3 px-4 py-2.5">
               <div className="min-w-0">
-                <p className="font-medium">{item.fundName}</p>
-                <p className="truncate text-xs text-muted">
-                  {item.label}
-                  {item.siteAddress ? ` · ${item.siteAddress}` : ""}
-                </p>
+                <p className="truncate text-sm font-medium">{item.fundName}</p>
+                <p className="truncate text-xs text-muted">{item.siteAddress ?? "—"}</p>
               </div>
-              <span className="shrink-0 text-xs font-medium tabular-nums text-accent">
-                {item.raw ?? item.date}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+              <div className="shrink-0 text-right">
+                <p className="text-sm tabular-nums">{item.date}</p>
+                <p className="text-[11px] text-muted">{item.label}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ScheduleCell({
+  date,
+  display,
+}: {
+  date: string | null | undefined;
+  display?: string | null;
+}) {
+  const text = display ?? date ?? "—";
+  return (
+    <td className="whitespace-nowrap border-t border-border px-3 py-2.5 text-xs tabular-nums text-muted">
+      {text}
+    </td>
   );
 }

@@ -99,8 +99,11 @@ export interface LabFund {
   /** 매입기관 (SH/GH/LH 등) */
   purchaseAgency: string | null;
   setupDate: string | null;
+  /** 중도상환(예정)일 — 상환일과 별개 */
+  earlyRepaymentDate: string | null;
   maturityDate: string | null;
   loanMaturityDate: string | null;
+  /** 상환일 (완료·확정 상환) */
   repaymentDate: string | null;
   setupAmount: number | null;
   balance: number | null;

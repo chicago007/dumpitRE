@@ -38,8 +38,10 @@ export interface MaturityMonthRow {
   label: string;
   loanCount: number;
   fundCount: number;
+  earlyCount: number;
   loanAmount: number;
   fundAmount: number;
+  earlyAmount: number;
 }
 
 export interface InterestMonthRow {
@@ -121,8 +123,10 @@ export function fillMaturityMonthlyGaps(rows: MaturityMonthRow[], year: string):
         label: `${i + 1}월`,
         loanCount: 0,
         fundCount: 0,
+        earlyCount: 0,
         loanAmount: 0,
         fundAmount: 0,
+        earlyAmount: 0,
       }
     );
   });
@@ -304,10 +308,17 @@ export function aggregateByRegion(funds: LabFund[]): RegionAggregate[] {
 function bumpMaturity(
   map: Map<
     string,
-    { loanCount: number; fundCount: number; loanAmount: number; fundAmount: number }
+    {
+      loanCount: number;
+      fundCount: number;
+      earlyCount: number;
+      loanAmount: number;
+      fundAmount: number;
+      earlyAmount: number;
+    }
   >,
   date: string | null,
-  kind: "loan" | "fund",
+  kind: "loan" | "fund" | "early",
   amount: number,
   mode: PeriodMode
 ) {
@@ -317,31 +328,44 @@ function bumpMaturity(
   const row = map.get(key) ?? {
     loanCount: 0,
     fundCount: 0,
+    earlyCount: 0,
     loanAmount: 0,
     fundAmount: 0,
+    earlyAmount: 0,
   };
   if (kind === "loan") {
     row.loanCount += 1;
     row.loanAmount += amount;
-  } else {
+  } else if (kind === "fund") {
     row.fundCount += 1;
     row.fundAmount += amount;
+  } else {
+    row.earlyCount += 1;
+    row.earlyAmount += amount;
   }
   map.set(key, row);
 }
 
-/** 대출만기·펀드만기 연도별/월별 집계 */
+/** 중도상환·대출만기·펀드만기 연도별/월별 집계 */
 export function aggregateMaturityByPeriod(
   funds: LabFund[],
   mode: PeriodMode
 ): MaturityMonthRow[] {
   const map = new Map<
     string,
-    { loanCount: number; fundCount: number; loanAmount: number; fundAmount: number }
+    {
+      loanCount: number;
+      fundCount: number;
+      earlyCount: number;
+      loanAmount: number;
+      fundAmount: number;
+      earlyAmount: number;
+    }
   >();
 
   for (const f of funds) {
     const amt = f.setupAmount ?? f.balance ?? 0;
+    bumpMaturity(map, f.earlyRepaymentDate, "early", amt, mode);
     bumpMaturity(map, f.loanMaturityDate, "loan", amt, mode);
     bumpMaturity(map, f.maturityDate, "fund", amt, mode);
   }
@@ -486,12 +510,23 @@ export function listMaturityDetails(
   funds: LabFund[],
   targetKey: string,
   mode: PeriodMode
-): { loan: DrillDownItem[]; fund: DrillDownItem[] } {
+): { early: DrillDownItem[]; loan: DrillDownItem[]; fund: DrillDownItem[] } {
+  const early: DrillDownItem[] = [];
   const loan: DrillDownItem[] = [];
   const fund: DrillDownItem[] = [];
 
   for (const f of funds) {
     const amount = f.setupAmount ?? f.balance ?? 0;
+    if (dateMatchesPeriod(f.earlyRepaymentDate, targetKey, mode)) {
+      early.push({
+        id: `${f.id}-early`,
+        fundId: f.id,
+        fundName: f.name,
+        sublabel: "중도상환",
+        amount,
+        date: f.earlyRepaymentDate,
+      });
+    }
     if (dateMatchesPeriod(f.loanMaturityDate, targetKey, mode)) {
       loan.push({
         id: `${f.id}-loan`,
@@ -514,9 +549,10 @@ export function listMaturityDetails(
     }
   }
 
+  early.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
   loan.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
   fund.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
-  return { loan, fund };
+  return { early, loan, fund };
 }
 
 export function listInterestDetails(

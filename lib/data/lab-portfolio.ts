@@ -187,6 +187,7 @@ function trySeedFromSample() {
 function normalizeFund(f: LabFund): LabFund {
   const next = {
     ...f,
+    earlyRepaymentDate: f.earlyRepaymentDate ?? null,
     interestRate: normalizeRateValue(f.interestRate),
     feeRate: normalizeRateValue(f.feeRate),
     trustCompany: f.trustCompany ?? null,
@@ -456,6 +457,7 @@ export async function upsertLabFundFromProposal(input: {
         fundCode: null,
         purchaseAgency: input.purchaseAgency ?? null,
         setupDate: input.setupDate ?? null,
+        earlyRepaymentDate: null,
         maturityDate: input.maturityDate ?? null,
         loanMaturityDate: input.loanMaturityDate ?? null,
         repaymentDate: null,

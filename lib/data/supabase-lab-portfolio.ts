@@ -15,6 +15,7 @@ type LabFundRow = {
   fund_code: string | null;
   purchase_agency: string | null;
   setup_date: string | null;
+  early_repayment_date: string | null;
   maturity_date: string | null;
   loan_maturity_date: string | null;
   repayment_date: string | null;
@@ -69,6 +70,7 @@ export function fundToRow(fund: LabFund): LabFundRow {
     fund_code: fund.fundCode,
     purchase_agency: fund.purchaseAgency,
     setup_date: toDate(fund.setupDate),
+    early_repayment_date: toDate(fund.earlyRepaymentDate),
     maturity_date: toDate(fund.maturityDate),
     loan_maturity_date: toDate(fund.loanMaturityDate),
     repayment_date: toDate(fund.repaymentDate),
@@ -106,6 +108,7 @@ export function rowToFund(row: LabFundRow): LabFund {
     fundCode: row.fund_code,
     purchaseAgency: row.purchase_agency,
     setupDate: row.setup_date,
+    earlyRepaymentDate: row.early_repayment_date ?? null,
     maturityDate: row.maturity_date,
     loanMaturityDate: row.loan_maturity_date,
     repaymentDate: row.repayment_date,

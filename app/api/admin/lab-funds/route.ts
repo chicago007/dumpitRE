@@ -75,6 +75,7 @@ export async function PUT(req: NextRequest) {
     "developer",
     "contractor",
     "setupDate",
+    "earlyRepaymentDate",
     "maturityDate",
     "loanMaturityDate",
     "repaymentDate",

@@ -427,16 +427,27 @@ function MaturityTimelineChart({
   rows,
   selectedKey,
   onSelect,
+  showEarly,
+  showLoan,
+  showFund,
 }: {
   rows: MaturityMonthRow[];
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
+  showEarly: boolean;
+  showLoan: boolean;
+  showFund: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyChart message="만기일 데이터가 없습니다." />;
   }
 
-  const max = Math.max(...rows.map((r) => r.loanCount + r.fundCount), 1);
+  const visibleTotal = (r: MaturityMonthRow) =>
+    (showEarly ? r.earlyCount : 0) +
+    (showLoan ? r.loanCount : 0) +
+    (showFund ? r.fundCount : 0);
+
+  const max = Math.max(...rows.map(visibleTotal), 1);
   const barW = Math.min(24, Math.max(10, 480 / rows.length));
   const w = Math.max(400, rows.length * (barW + 8) + 48);
   const h = 200;
@@ -448,10 +459,11 @@ function MaturityTimelineChart({
       <svg viewBox={`0 0 ${w} ${h}`} className="min-w-full" role="img" aria-label="만기 캘린더">
         {rows.map((row, i) => {
           const x = pad.left + i * (barW + 8);
-          const loanH = (row.loanCount / max) * innerH;
-          const fundH = (row.fundCount / max) * innerH;
+          const earlyH = showEarly ? (row.earlyCount / max) * innerH : 0;
+          const loanH = showLoan ? (row.loanCount / max) * innerH : 0;
+          const fundH = showFund ? (row.fundCount / max) * innerH : 0;
           const selected = selectedKey === row.key;
-          const hasData = row.loanCount > 0 || row.fundCount > 0;
+          const hasData = visibleTotal(row) > 0;
           return (
             <g
               key={row.key}
@@ -471,7 +483,18 @@ function MaturityTimelineChart({
                   opacity={0.08}
                 />
               ) : null}
-              {row.loanCount > 0 ? (
+              {showEarly && row.earlyCount > 0 ? (
+                <rect
+                  x={x}
+                  y={pad.top + innerH - earlyH - loanH - fundH}
+                  width={barW}
+                  height={earlyH}
+                  rx={2}
+                  fill="#f59e0b"
+                  opacity={selected || !selectedKey ? 1 : 0.45}
+                />
+              ) : null}
+              {showLoan && row.loanCount > 0 ? (
                 <rect
                   x={x}
                   y={pad.top + innerH - loanH - fundH}
@@ -482,7 +505,7 @@ function MaturityTimelineChart({
                   opacity={selected || !selectedKey ? 1 : 0.45}
                 />
               ) : null}
-              {row.fundCount > 0 ? (
+              {showFund && row.fundCount > 0 ? (
                 <rect
                   x={x}
                   y={pad.top + innerH - fundH}
@@ -507,10 +530,16 @@ function MaturityTimelineChart({
       </svg>
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted">
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-im-blue" /> 대출만기 ({rows.reduce((s, r) => s + r.loanCount, 0)}건)
+          <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" /> 중도상환 (
+          {rows.reduce((s, r) => s + r.earlyCount, 0)}건)
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-im-light-blue" /> 펀드만기 ({rows.reduce((s, r) => s + r.fundCount, 0)}건)
+          <span className="h-2.5 w-2.5 rounded-sm bg-im-blue" /> 대출만기 (
+          {rows.reduce((s, r) => s + r.loanCount, 0)}건)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-im-light-blue" /> 펀드만기 (
+          {rows.reduce((s, r) => s + r.fundCount, 0)}건)
         </span>
         <span className="text-muted/80">막대를 클릭하면 상세 목록이 표시됩니다.</span>
       </div>
@@ -966,6 +995,9 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
   const [periodMode, setPeriodMode] = useState<PeriodMode>("month");
   const [year, setYear] = useState<string | null>(CURRENT_YEAR);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [showEarly, setShowEarly] = useState(true);
+  const [showLoan, setShowLoan] = useState(true);
+  const [showFund, setShowFund] = useState(true);
   const allRows = useMemo(
     () => aggregateMaturityByPeriod(funds, periodMode),
     [funds, periodMode]
@@ -975,47 +1007,90 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
   const selectedRow = rows.find((r) => r.key === selectedKey) ?? null;
   const details = useMemo(
     () =>
-      selectedKey ? listMaturityDetails(funds, selectedKey, periodMode) : { loan: [], fund: [] },
+      selectedKey
+        ? listMaturityDetails(funds, selectedKey, periodMode)
+        : { early: [], loan: [], fund: [] },
     [funds, selectedKey, periodMode]
+  );
+
+  const kindToggle = (
+    <div className="flex flex-wrap items-center gap-1 rounded-lg bg-neutral-100 p-1">
+      {(
+        [
+          ["early", "중도상환", showEarly, setShowEarly],
+          ["loan", "대출만기", showLoan, setShowLoan],
+          ["fund", "펀드만기", showFund, setShowFund],
+        ] as const
+      ).map(([id, label, active, setActive]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setActive(!active)}
+          className={cn(
+            "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+            active
+              ? "bg-white text-foreground shadow-sm"
+              : "text-muted hover:text-foreground"
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 
   return (
     <ChartCard
-      title="대출만기 · 펀드만기 캘린더"
-      subtitle={periodMode === "year" ? "연도별 만기 예정 건수" : "월별 만기 예정 건수"}
+      title="중도상환 · 대출만기 · 펀드만기 캘린더"
+      subtitle={periodMode === "year" ? "연도별 만기·상환 예정 건수" : "월별 만기·상환 예정 건수"}
       action={
-        <PeriodChartControls
-          mode={periodMode}
-          onModeChange={(mode) => {
-            setPeriodMode(mode);
-            setSelectedKey(null);
-            setYear(mode === "month" ? CURRENT_YEAR : null);
-          }}
-          years={years}
-          year={year}
-          onYearChange={(y) => {
-            setYear(y);
-            setSelectedKey(null);
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {kindToggle}
+          <PeriodChartControls
+            mode={periodMode}
+            onModeChange={(mode) => {
+              setPeriodMode(mode);
+              setSelectedKey(null);
+              setYear(mode === "month" ? CURRENT_YEAR : null);
+            }}
+            years={years}
+            year={year}
+            onYearChange={(y) => {
+              setYear(y);
+              setSelectedKey(null);
+            }}
+          />
+        </div>
       }
     >
       <MaturityTimelineChart
         rows={rows}
         selectedKey={selectedKey}
         onSelect={setSelectedKey}
+        showEarly={showEarly}
+        showLoan={showLoan}
+        showFund={showFund}
       />
       {selectedRow ? (
         <ChartDrillDown
           title={selectedRow.label}
           summary={
             <>
-              대출만기 {selectedRow.loanCount}건 ({formatEokText(selectedRow.loanAmount)}) · 펀드만기{" "}
+              중도상환 {selectedRow.earlyCount}건 ({formatEokText(selectedRow.earlyAmount)}) · 대출만기{" "}
+              {selectedRow.loanCount}건 ({formatEokText(selectedRow.loanAmount)}) · 펀드만기{" "}
               {selectedRow.fundCount}건 ({formatEokText(selectedRow.fundAmount)})
             </>
           }
         >
-          {details.loan.length > 0 ? (
+          {showEarly && details.early.length > 0 ? (
+            <div className="mb-4">
+              <p className="mb-2 text-xs font-medium text-foreground">
+                중도상환 ({details.early.length}건)
+              </p>
+              <DrillDownList items={details.early} funds={funds} />
+            </div>
+          ) : null}
+          {showLoan && details.loan.length > 0 ? (
             <div className="mb-4">
               <p className="mb-2 text-xs font-medium text-foreground">
                 대출만기 ({details.loan.length}건)
@@ -1023,7 +1098,7 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
               <DrillDownList items={details.loan} funds={funds} />
             </div>
           ) : null}
-          {details.fund.length > 0 ? (
+          {showFund && details.fund.length > 0 ? (
             <div>
               <p className="mb-2 text-xs font-medium text-foreground">
                 펀드만기 ({details.fund.length}건)
@@ -1031,7 +1106,10 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
               <DrillDownList items={details.fund} funds={funds} />
             </div>
           ) : null}
-          {details.loan.length === 0 && details.fund.length === 0 ? (
+          {(showEarly ? details.early.length : 0) +
+            (showLoan ? details.loan.length : 0) +
+            (showFund ? details.fund.length : 0) ===
+          0 ? (
             <p className="text-sm text-muted">해당 기간 데이터가 없습니다.</p>
           ) : null}
         </ChartDrillDown>
