@@ -61,20 +61,35 @@ function isActive(pathname: string, item: NavItem) {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({
+  item,
+  pathname,
+  compact,
+}: {
+  item: NavItem;
+  pathname: string;
+  compact?: boolean;
+}) {
   const active = isActive(pathname, item);
   const Icon = item.icon;
   return (
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
+        "flex items-center rounded-xl px-3 transition-colors",
+        compact ? "gap-2 py-1.5 text-[12px]" : "gap-2.5 py-2 text-sm",
         active
           ? "bg-white font-medium text-sidebar-foreground shadow-sm"
           : "text-sidebar-muted hover:bg-white/45 hover:text-sidebar-foreground"
       )}
     >
-      <Icon className={cn("h-4 w-4 shrink-0", active && "text-sidebar-active")} />
+      <Icon
+        className={cn(
+          "shrink-0",
+          compact ? "h-3.5 w-3.5" : "h-4 w-4",
+          active && "text-sidebar-active"
+        )}
+      />
       <span className="leading-tight">{item.label}</span>
     </Link>
   );
@@ -217,12 +232,12 @@ export function Sidebar({
 
         {isAdmin ? (
           <div>
-            <p className="mb-1 px-3 text-[11px] font-semibold tracking-wide text-sidebar-muted uppercase">
+            <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-sidebar-muted uppercase">
               관리자
             </p>
             <div className="flex flex-col gap-0.5">
               {adminNav.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} />
+                <NavLink key={item.href} item={item} pathname={pathname} compact />
               ))}
             </div>
           </div>

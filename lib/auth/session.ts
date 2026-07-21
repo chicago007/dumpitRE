@@ -10,21 +10,25 @@ export interface AuthUser {
 
 export const AUTH_COOKIE = "dumpit_auth";
 
-/** 고정 계정 2개 (관리자 / 일반). env로 비밀번호만 덮어쓸 수 있음. */
+function envPassword(key: string): string {
+  return process.env[key]?.trim() ?? "";
+}
+
+/** 계정 비밀번호는 .env.local / Vercel Environment Variables 에서만 설정 (코드에 평문 저장 금지) */
 const USERS: Record<string, { password: string; user: AuthUser }> = {
   admin: {
-    password: process.env.DUMPIT_ADMIN_PASSWORD ?? "imrwap0700",
+    password: envPassword("DUMPIT_ADMIN_PASSWORD"),
     user: { id: "u-admin", name: "관리자", role: "admin" },
   },
   guest: {
-    password: process.env.DUMPIT_GUEST_PASSWORD ?? "0700",
+    password: envPassword("DUMPIT_GUEST_PASSWORD"),
     user: { id: "u-guest", name: "guest", role: "user" },
   },
 };
 
 export function authenticate(username: string, password: string): AuthUser | null {
   const row = USERS[username.trim().toLowerCase()];
-  if (!row || row.password !== password) return null;
+  if (!row?.password || row.password !== password) return null;
   return row.user;
 }
 
