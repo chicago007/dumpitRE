@@ -6,6 +6,26 @@
 
 ## 2026-07-21
 
+### v1.01
+
+- 버전 `v1.01` (`lib/version.ts`)
+- **인증·접근**
+  - 전 페이지 로그인 필수 (`middleware.ts`, `RequireAuth`)
+  - 고정 계정: `admin` / `guest` — 비밀번호는 `.env` (`DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD`)
+  - guest 로그인 기록 (`guest_login_logs`, `/admin/login-logs`)
+  - 수수료 추이 · 설정·상환 추이 · 업체별/지역별 현황 → **관리자만**
+- **로그인·고지**
+  - 임직원 고지문을 로그인 화면 상단으로 이동 (헤더 고지 제거)
+  - 제목: 「LH/SH/GH 매입약정 부동산랩 현황관리」
+- **UI/UX**
+  - 전체 현황: 진행 비중·잔액/설정액·누적수수료를 헤더 제목 옆에 표시
+  - 사업장별(회차): 왼쪽 호수 목록 → 헤더 드롭다운 (`부동산랩 N호/펀드M호`)
+  - 만기 캘린더: 중도상환/대출만기/펀드만기 토글에 차트 색상 표시
+  - 사업장 주소: 서로 다른 지역만 줄바꿈 (필지 번호 `275-3, 3-204`는 한 줄 유지)
+  - 잔액 없음/0 → `-` 표시 (`formatBalance`)
+  - **상환일** 있는 랩: 대출·펀드 만기일·분배금 지급일 UI 숨김 (데이터 유지)
+  - 사이드바 브랜드 줄바꿈 방지
+
 ### v1.00
 
 - 버전 관리 시작. 사이드바 「부동산랩 사업장관리」 옆에 `v1.00` 표시 (`lib/version.ts`)
@@ -74,5 +94,6 @@
 | `004_lab_progress.sql` | lab_progress (초기) |
 | `005_product_review_progress_history.sql` | product_master · review_queue · 공정 시계열 unique |
 | `006_early_repayment_date.sql` | lab_funds.early_repayment_date (중도상환일) |
+| `007_guest_login_logs.sql` | guest 로그인 기록 |
 
-신규 환경은 **001→006 순서**로 실행.
+신규 환경은 **001→007 순서**로 실행.

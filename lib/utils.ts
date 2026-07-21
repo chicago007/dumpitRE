@@ -16,6 +16,12 @@ export function formatCurrency(amount: number): string {
   return amount.toLocaleString("ko-KR");
 }
 
+/** 잔액 표시: 없거나 0 이하면 "-" */
+export function formatBalance(amount: number | null | undefined): string {
+  if (amount == null || amount <= 0) return "-";
+  return formatCurrency(amount);
+}
+
 /** 원 → 억, 소수 자릿수 고정 (예: 8.35억) */
 export function formatEok(amount: number, fractionDigits = 2): string {
   const eok = amount / 100_000_000;

@@ -205,6 +205,14 @@ export function deriveLabFundStatus(fund: {
   return "active";
 }
 
+/** 상환일이 입력된 경우 (표시용 — 만기·분배일 숨김 판단) */
+export function hasRepaymentDate(fund: {
+  repaymentDate?: string | null;
+}): boolean {
+  const d = fund.repaymentDate?.trim();
+  return Boolean(d) && d !== "—" && d !== "-";
+}
+
 /** 상환일이 있거나 상태가 상환인 랩 */
 export function isRepaidFund(fund: {
   repaymentDate?: string | null;

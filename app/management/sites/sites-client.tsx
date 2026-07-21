@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { LabRoundCard } from "@/components/management/fund-panels";
 import { useLabPortfolio } from "@/components/management/use-lab-portfolio";
@@ -11,7 +12,6 @@ import {
   siteKey,
   sortLabFunds,
 } from "@/lib/lab/portfolio-ui";
-import { cn } from "@/lib/utils";
 import type { LabFund } from "@/lib/types";
 
 export default function ManagementSitesPage() {
@@ -76,13 +76,52 @@ export default function ManagementSitesPage() {
         ? siteFilter
         : null;
 
-  function shortLabLabel(name: string) {
-    const m = name.match(/(\d+)\s*호/);
-    return m ? `${m[1]}호` : name;
+  function labSelectLabel(fund: LabFund) {
+    const m = fund.name.match(/(\d+)\s*호/);
+    const labPart = m ? `${m[1]}호` : fund.name.replace(/^부동산랩\s*/, "").trim() || fund.name;
+    const fundPart = fund.fundName?.trim();
+    if (fundPart) return `부동산랩 ${labPart}/${fundPart}`;
+    return `부동산랩 ${labPart}`;
   }
 
+  const currentLabel = selectedFund ? labSelectLabel(selectedFund) : "부동산랩 선택";
+
+  const labPicker =
+    selectableFunds.length > 0 ? (
+      <>
+        <label className="relative inline-grid max-w-full items-center">
+          <span className="sr-only">부동산랩 선택</span>
+          <span
+            className="invisible col-start-1 row-start-1 h-9 whitespace-pre py-1.5 pr-8 pl-2.5 text-sm font-medium"
+            aria-hidden
+          >
+            {currentLabel}
+          </span>
+          <select
+            className="col-start-1 row-start-1 h-9 w-full min-w-0 appearance-none rounded-lg border border-border bg-white py-1.5 pr-8 pl-2.5 text-sm font-medium text-foreground shadow-sm outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+            value={selectedId ?? ""}
+            onChange={(e) => selectLab(e.target.value)}
+          >
+            {selectableFunds.map((fund) => (
+              <option key={fund.id} value={fund.id}>
+                {labSelectLabel(fund)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute top-1/2 right-2 h-4 w-4 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+        </label>
+        <span className="hidden shrink-0 text-xs text-muted sm:inline">
+          전체 {selectableFunds.length}건
+          {siteLabel ? ` · 필터: ${siteLabel}` : null}
+        </span>
+      </>
+    ) : null;
+
   return (
-    <AppShell title="사업장별(회차별) 현황">
+    <AppShell title="사업장별(회차별) 현황" titleExtra={labPicker}>
       <div className="mx-auto max-w-7xl">
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
@@ -91,50 +130,7 @@ export default function ManagementSitesPage() {
         ) : selectableFunds.length === 0 ? (
           <p className="text-sm text-muted">표시할 부동산랩이 없습니다.</p>
         ) : (
-          <div className="flex h-[calc(100dvh-8.5rem)] min-h-[28rem] gap-4 overflow-hidden">
-            {/* 왼쪽: 부동산랩 목록 (보조 네비) */}
-            <aside
-              className="flex w-[4.5rem] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-100/90"
-            >
-              <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border/60 px-1.5 py-2.5">
-                <p className="text-[10px] font-medium tracking-wide text-neutral-400">
-                  부동산랩
-                </p>
-                <span className="text-[10px] text-neutral-400">{selectableFunds.length}</span>
-              </div>
-              {siteLabel ? (
-                <p
-                  className="shrink-0 truncate border-b border-border/60 px-1.5 py-1.5 text-[10px] text-neutral-400"
-                  title={siteLabel}
-                >
-                  필터
-                </p>
-              ) : null}
-              <div className="min-h-0 flex-1 overflow-y-auto p-1">
-                {selectableFunds.map((fund) => {
-                  const active = fund.id === selectedId;
-                  const label = shortLabLabel(fund.name);
-                  return (
-                    <button
-                      key={fund.id}
-                      type="button"
-                      onClick={() => selectLab(fund.id)}
-                      title={fund.name}
-                      className={cn(
-                        "mb-0.5 block w-full rounded-md px-1 py-1.5 text-center text-sm tabular-nums whitespace-nowrap transition-colors",
-                        active
-                          ? "bg-accent font-semibold text-accent-foreground shadow-sm"
-                          : "font-medium text-slate-600 hover:bg-white hover:text-slate-900"
-                      )}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </aside>
-
-            {/* 오른쪽: 사업장 현황 (주 영역) */}
+          <div className="flex h-[calc(100dvh-8.5rem)] min-h-[28rem] flex-col overflow-hidden">
             <section className="shadow-card min-h-0 min-w-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card">
               {selectedFund ? (
                 <LabRoundCard
@@ -143,7 +139,7 @@ export default function ManagementSitesPage() {
                   onFundUpdated={handleFundUpdated}
                 />
               ) : (
-                <p className="p-4 text-sm text-muted">왼쪽에서 부동산랩을 선택하세요.</p>
+                <p className="p-4 text-sm text-muted">부동산랩을 선택하세요.</p>
               )}
             </section>
           </div>

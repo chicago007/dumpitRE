@@ -1017,22 +1017,27 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
     <div className="flex flex-wrap items-center gap-1 rounded-lg bg-neutral-100 p-1">
       {(
         [
-          ["early", "중도상환", showEarly, setShowEarly],
-          ["loan", "대출만기", showLoan, setShowLoan],
-          ["fund", "펀드만기", showFund, setShowFund],
+          ["early", "중도상환", showEarly, setShowEarly, "#f59e0b"],
+          ["loan", "대출만기", showLoan, setShowLoan, "#7db5ff"],
+          ["fund", "펀드만기", showFund, setShowFund, "#53e1e5"],
         ] as const
-      ).map(([id, label, active, setActive]) => (
+      ).map(([id, label, active, setActive, color]) => (
         <button
           key={id}
           type="button"
           onClick={() => setActive(!active)}
           className={cn(
-            "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+            "flex flex-col items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors",
             active
               ? "bg-white text-foreground shadow-sm"
-              : "text-muted hover:text-foreground"
+              : "text-muted opacity-50 hover:text-foreground hover:opacity-80"
           )}
         >
+          <span
+            className="h-1.5 w-6 rounded-full"
+            style={{ backgroundColor: color }}
+            aria-hidden
+          />
           {label}
         </button>
       ))}

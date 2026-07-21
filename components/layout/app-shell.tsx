@@ -9,10 +9,13 @@ import { cn } from "@/lib/utils";
 interface AppShellProps {
   title: string;
   children: React.ReactNode;
+  /** 제목 바로 옆 (왼쪽) */
+  titleExtra?: React.ReactNode;
+  /** 헤더 우측 */
   action?: React.ReactNode;
 }
 
-export function AppShell({ title, children, action }: AppShellProps) {
+export function AppShell({ title, children, titleExtra, action }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
@@ -31,7 +34,7 @@ export function AppShell({ title, children, action }: AppShellProps) {
         <Sidebar mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 shadow-card lg:gap-4 lg:px-6">
+          <header className="z-20 flex min-h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-2 shadow-card lg:gap-4 lg:px-6">
             <button
               type="button"
               className={cn(
@@ -44,9 +47,12 @@ export function AppShell({ title, children, action }: AppShellProps) {
             >
               {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
-              {title}
-            </h1>
+            <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+              <h1 className="shrink-0 text-base font-semibold text-foreground">{title}</h1>
+              {titleExtra ? (
+                <div className="flex min-w-0 flex-1 items-center overflow-hidden">{titleExtra}</div>
+              ) : null}
+            </div>
             {action ? (
               <div className="ml-auto flex shrink-0 items-center gap-2">{action}</div>
             ) : null}

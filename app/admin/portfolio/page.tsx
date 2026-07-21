@@ -54,7 +54,7 @@ function PercentRateInput({
 
 function eokToWon(eok: string): number | null {
   const t = eok.trim();
-  if (!t) return null;
+  if (!t || t === "-") return null;
   const n = Number(t.replace(/,/g, ""));
   if (!Number.isFinite(n)) return null;
   // 100 미만이면 억 단위로 해석
@@ -63,7 +63,7 @@ function eokToWon(eok: string): number | null {
 }
 
 function wonToEok(amount: number | null): string {
-  if (amount == null) return "";
+  if (amount == null || amount <= 0) return "-";
   return String(Number((amount / 100_000_000).toFixed(2)));
 }
 

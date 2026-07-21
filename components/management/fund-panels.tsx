@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { LabFund } from "@/lib/types";
-import { formatRate, isRepaidFund } from "@/lib/lab/portfolio-ui";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatRate, hasRepaymentDate, isRepaidFund } from "@/lib/lab/portfolio-ui";
+import { formatBalance, formatCurrency, cn } from "@/lib/utils";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { FundStatusBadge } from "@/components/ui/fund-status-badge";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,7 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
           <tbody className="divide-y divide-border">
             {funds.map((fund) => {
               const byRound = new Map(fund.interestPayments.map((p) => [p.round, p]));
+              const hidePays = hasRepaymentDate(fund);
               return (
                 <tr key={fund.id} id={fund.id} className="hover:bg-slate-100/80">
                   <td className="sticky left-0 z-10 bg-card px-4 py-3">
@@ -137,6 +138,13 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
                     <FundProgressBadge fund={fund} />
                   </td>
                   {rounds.map((r) => {
+                    if (hidePays) {
+                      return (
+                        <td key={r} className="px-3 py-3 text-center text-xs text-muted">
+                          —
+                        </td>
+                      );
+                    }
                     const p = byRound.get(r);
                     const upcoming = p ? isUpcoming(p.date) : false;
                     return (
@@ -180,6 +188,8 @@ export function LabRoundDetail({
   const { isAdmin } = useAuth();
   const canEdit = isAdmin && !readOnly;
   const payments = [...fund.interestPayments].sort((a, b) => a.round - b.round);
+  const repaid = hasRepaymentDate(fund);
+  const displayPayments = repaid ? [] : payments;
   const [comment, setComment] = useState(fund.progressComment ?? "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -217,16 +227,22 @@ export function LabRoundDetail({
     {
       label: "설정액(잔액)",
       value:
-        fund.setupAmount != null || fund.balance != null
-          ? `${fund.setupAmount != null ? formatCurrency(fund.setupAmount) : "—"}(${fund.balance != null ? formatCurrency(fund.balance) : "—"})`
-          : "—",
+        fund.setupAmount != null
+          ? `${formatCurrency(fund.setupAmount)}(${formatBalance(fund.balance)})`
+          : fund.balance != null && fund.balance > 0
+            ? `-(${formatBalance(fund.balance)})`
+            : "-",
     },
     { label: "금리", value: formatRate(fund.interestRate) },
     { label: "수수료율", value: formatRate(fund.feeRate) },
     { label: "설정일", value: v(fund.setupDate) },
     { label: "중도상환(예정)일", value: v(fund.earlyRepaymentDate) },
-    { label: "대출만기일", value: v(fund.loanMaturityDate) },
-    { label: "펀드만기일", value: v(fund.maturityDate) },
+    ...(repaid
+      ? []
+      : [
+          { label: "대출만기일", value: v(fund.loanMaturityDate) },
+          { label: "펀드만기일", value: v(fund.maturityDate) },
+        ]),
     { label: "신탁사", value: v(fund.trustCompany) },
     { label: "신탁방식", value: v(fund.trustType) },
     { label: "시행사", value: fund.developer },
@@ -245,7 +261,7 @@ export function LabRoundDetail({
     { label: "펀드코드", value: fund.fundCode },
   ].map(({ label, value }) => value?.trim() || label);
   const siteAddress = fund.siteAddress?.trim();
-  const addressLines = splitDisplayLines(siteAddress);
+  const addressLines = splitSiteAddressLines(siteAddress);
   const businessDesc = fund.businessDesc?.trim() || "사업내용";
   const hasMap = Boolean(siteAddress);
   const mapUrl = siteAddress
@@ -330,16 +346,22 @@ export function LabRoundDetail({
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h4 className="text-sm font-semibold text-slate-800">회차별 이자지급</h4>
-            <span className="text-xs text-muted">{payments.length}회차</span>
+            <span className="text-xs text-muted">
+              {repaid ? "상환 완료" : `${displayPayments.length}회차`}
+            </span>
           </div>
-          {payments.length === 0 ? (
+          {repaid ? (
+            <p className="rounded-lg border border-dashed border-border bg-neutral-50 px-3 py-4 text-center text-xs text-muted">
+              상환일이 등록되어 분배 일정은 표시하지 않습니다.
+            </p>
+          ) : displayPayments.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border bg-neutral-50 px-3 py-4 text-center text-xs text-muted">
               등록된 회차가 없습니다.
             </p>
           ) : (
             <HorizontalScroll>
               <ol className="grid w-max grid-cols-4 gap-2">
-              {payments.map((p) => {
+              {displayPayments.map((p) => {
                 const upcoming = isUpcoming(p.date);
                 return (
                   <li
@@ -468,6 +490,40 @@ function splitDisplayLines(raw: string | null | undefined): string[] {
       .filter(Boolean)
   );
   return parts.length ? parts : ["—"];
+}
+
+/** 새 사업장 주소처럼 보이는지 (시·군·구·동 등). 필지번호 "3-204" 는 false */
+function looksLikeSiteAddress(part: string): boolean {
+  const t = part.trim();
+  if (!t || !/[가-힣]/.test(t)) return false;
+  return /(?:특별시|광역시|특별자치시|특별자치도|시|군|구|읍|면|동|리|로|길)/.test(t);
+}
+
+/**
+ * 사업장 주소 전용: 서로 다른 지역만 줄바꿈.
+ * "북가좌동 275-3, 3-204" 처럼 필지 연속은 한 줄로 유지.
+ */
+function splitSiteAddressLines(raw: string | null | undefined): string[] {
+  const s = raw?.trim();
+  if (!s || s === "—") return ["—"];
+  const byNewline = s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const merged: string[] = [];
+  for (const line of byNewline) {
+    const chunks = line.split(/,\s+/).map((p) => p.trim()).filter(Boolean);
+    if (!chunks.length) continue;
+    let current = chunks[0];
+    for (let i = 1; i < chunks.length; i++) {
+      const next = chunks[i];
+      if (looksLikeSiteAddress(next)) {
+        merged.push(current);
+        current = next;
+      } else {
+        current = `${current}, ${next}`;
+      }
+    }
+    merged.push(current);
+  }
+  return merged.length ? merged : ["—"];
 }
 
 function Item({ label, value }: { label: string; value: string | null | undefined }) {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
-import { sortLabFunds } from "@/lib/lab/portfolio-ui";
+import { hasRepaymentDate, sortLabFunds } from "@/lib/lab/portfolio-ui";
 import { cn } from "@/lib/utils";
 import type { LabFund, LabPortfolioSnapshot } from "@/lib/types";
 
@@ -49,6 +49,7 @@ function isOnOrAfterToday(date: string): boolean {
 function buildDistributionDates(funds: LabFund[]): DateItem[] {
   const items: DateItem[] = [];
   for (const fund of funds) {
+    if (hasRepaymentDate(fund)) continue;
     for (const p of fund.interestPayments) {
       if (!isOnOrAfterToday(p.date)) continue;
       items.push({
@@ -79,6 +80,7 @@ function buildMaturityDates(funds: LabFund[]): DateItem[] {
         kind: "early",
       });
     }
+    if (hasRepaymentDate(fund)) continue;
     if (fund.loanMaturityDate && isOnOrAfterToday(fund.loanMaturityDate)) {
       items.push({
         key: `${fund.id}-loan-${fund.loanMaturityDate}`,
@@ -368,6 +370,7 @@ export default function InterestPage() {
                   <tbody>
                     {funds.map((f) => {
                       const byRound = new Map(f.interestPayments.map((p) => [p.round, p]));
+                      const hideSched = hasRepaymentDate(f);
                       return (
                         <tr key={f.id} className="hover:bg-slate-100/80">
                           <td className="sticky left-0 z-10 whitespace-nowrap border-t border-border bg-card px-4 py-2.5 font-medium">
@@ -375,10 +378,13 @@ export default function InterestPage() {
                           </td>
                           <ScheduleCell date={f.setupDate} />
                           <ScheduleCell date={f.earlyRepaymentDate} />
-                          <ScheduleCell date={f.loanMaturityDate} />
-                          <ScheduleCell date={f.maturityDate} />
+                          <ScheduleCell date={hideSched ? null : f.loanMaturityDate} />
+                          <ScheduleCell date={hideSched ? null : f.maturityDate} />
                           <ScheduleCell date={f.repaymentDate} />
                           {rounds.map((r) => {
+                            if (hideSched) {
+                              return <ScheduleCell key={r} date={null} />;
+                            }
                             const p = byRound.get(r);
                             return (
                               <ScheduleCell

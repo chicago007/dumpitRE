@@ -1,5 +1,5 @@
 import type { LabFund } from "@/lib/types";
-import { formatRate, rateToNumber } from "@/lib/lab/portfolio-ui";
+import { formatRate, hasRepaymentDate, rateToNumber } from "@/lib/lab/portfolio-ui";
 import { formatCurrency } from "@/lib/utils";
 
 export type PeriodMode = "month" | "year";
@@ -366,8 +366,11 @@ export function aggregateMaturityByPeriod(
   for (const f of funds) {
     const amt = f.setupAmount ?? f.balance ?? 0;
     bumpMaturity(map, f.earlyRepaymentDate, "early", amt, mode);
-    bumpMaturity(map, f.loanMaturityDate, "loan", amt, mode);
-    bumpMaturity(map, f.maturityDate, "fund", amt, mode);
+    // 상환일이 있으면 대출·펀드 만기는 집계에서 제외 (데이터는 유지)
+    if (!hasRepaymentDate(f)) {
+      bumpMaturity(map, f.loanMaturityDate, "loan", amt, mode);
+      bumpMaturity(map, f.maturityDate, "fund", amt, mode);
+    }
   }
 
   return [...map.entries()]
@@ -392,6 +395,7 @@ export function aggregateInterestByPeriod(
   const map = new Map<string, number>();
 
   for (const f of funds) {
+    if (hasRepaymentDate(f)) continue;
     for (const p of f.interestPayments ?? []) {
       const d = p.date?.trim();
       if (!d) continue;
@@ -527,6 +531,7 @@ export function listMaturityDetails(
         date: f.earlyRepaymentDate,
       });
     }
+    if (hasRepaymentDate(f)) continue;
     if (dateMatchesPeriod(f.loanMaturityDate, targetKey, mode)) {
       loan.push({
         id: `${f.id}-loan`,
@@ -563,6 +568,7 @@ export function listInterestDetails(
   const items: DrillDownItem[] = [];
 
   for (const f of funds) {
+    if (hasRepaymentDate(f)) continue;
     for (const p of f.interestPayments ?? []) {
       const d = p.date?.trim();
       if (!d) continue;

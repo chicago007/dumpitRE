@@ -16,11 +16,12 @@ import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import {
   encodeSiteParam,
   formatRate,
+  hasRepaymentDate,
   siteKey,
   sortLabFunds,
 } from "@/lib/lab/portfolio-ui";
 import { calcFundFeeAmount } from "@/lib/lab/portfolio-analytics";
-import { formatCurrency, formatEok } from "@/lib/utils";
+import { formatBalance, formatCurrency, formatEok } from "@/lib/utils";
 import type { LabFund } from "@/lib/types";
 
 function statusBadge(status: LabFund["status"]) {
@@ -44,9 +45,46 @@ export default function ManagementOverviewPage() {
     );
   }, [portfolio]);
 
+  const ratioItems = portfolio
+    ? [
+        {
+          label: "진행 비중",
+          numeratorLabel: "진행중",
+          denominatorLabel: "총 사업장수",
+          numeratorValue: portfolio.stats.activeCount.toLocaleString("ko-KR"),
+          denominatorValue: portfolio.stats.totalCount.toLocaleString("ko-KR"),
+          ratio:
+            portfolio.stats.totalCount > 0
+              ? portfolio.stats.activeCount / portfolio.stats.totalCount
+              : 0,
+          barClass: "bg-accent",
+        },
+        {
+          label: "잔액 / 설정액",
+          numeratorLabel: "잔액",
+          denominatorLabel: "설정액",
+          numeratorValue: formatCurrency(portfolio.stats.totalBalance),
+          denominatorValue: formatCurrency(portfolio.stats.totalSetupAmount),
+          ratio:
+            portfolio.stats.totalSetupAmount > 0
+              ? portfolio.stats.totalBalance / portfolio.stats.totalSetupAmount
+              : 0,
+          barClass: "bg-success",
+        },
+        {
+          label: "누적수수료",
+          simpleValue: formatEok(totalFeeAmount),
+          barClass: "bg-im-mint",
+        },
+      ]
+    : null;
+
   return (
     <AppShell
       title="전체 현황"
+      titleExtra={
+        ratioItems ? <RatioBars items={ratioItems} compact /> : null
+      }
       action={
         portfolio ? (
           <LabStatusFilterTabs value={filter} onChange={setFilter} />
@@ -65,40 +103,6 @@ export default function ManagementOverviewPage() {
           </div>
         ) : (
           <>
-            <RatioBars
-              items={[
-                {
-                  label: "진행 비중",
-                  numeratorLabel: "진행중",
-                  denominatorLabel: "총 사업장수",
-                  numeratorValue: portfolio.stats.activeCount.toLocaleString("ko-KR"),
-                  denominatorValue: portfolio.stats.totalCount.toLocaleString("ko-KR"),
-                  ratio:
-                    portfolio.stats.totalCount > 0
-                      ? portfolio.stats.activeCount / portfolio.stats.totalCount
-                      : 0,
-                  barClass: "bg-accent",
-                },
-                {
-                  label: "잔액 / 설정액",
-                  numeratorLabel: "잔액",
-                  denominatorLabel: "설정액",
-                  numeratorValue: formatCurrency(portfolio.stats.totalBalance),
-                  denominatorValue: formatCurrency(portfolio.stats.totalSetupAmount),
-                  ratio:
-                    portfolio.stats.totalSetupAmount > 0
-                      ? portfolio.stats.totalBalance / portfolio.stats.totalSetupAmount
-                      : 0,
-                  barClass: "bg-success",
-                },
-                {
-                  label: "누적수수료",
-                  simpleValue: formatEok(totalFeeAmount),
-                  barClass: "bg-im-mint",
-                },
-              ]}
-            />
-
             <div className="shadow-card overflow-hidden rounded-xl border border-border bg-card">
               <div className="border-b border-border px-4 py-3">
                 <p className="text-xs text-muted">
@@ -178,10 +182,10 @@ export default function ManagementOverviewPage() {
                             {f.purchaseAgency ?? "—"}
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 tabular-nums">
-                            {f.setupAmount != null ? formatCurrency(f.setupAmount) : "—"}
+                            {f.setupAmount != null ? formatCurrency(f.setupAmount) : "-"}
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 tabular-nums">
-                            {f.balance != null ? formatCurrency(f.balance) : "—"}
+                            {formatBalance(f.balance)}
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 tabular-nums">
                             {formatRate(f.interestRate)}
@@ -193,10 +197,10 @@ export default function ManagementOverviewPage() {
                             {f.setupDate ?? "—"}
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 text-xs tabular-nums">
-                            {f.maturityDate ?? "—"}
+                            {hasRepaymentDate(f) ? "—" : (f.maturityDate ?? "—")}
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 text-xs tabular-nums">
-                            {f.loanMaturityDate ?? "—"}
+                            {hasRepaymentDate(f) ? "—" : (f.loanMaturityDate ?? "—")}
                           </td>
                           <td className="whitespace-nowrap border-t border-border px-4 py-3 text-xs tabular-nums">
                             {f.repaymentDate ?? "—"}
