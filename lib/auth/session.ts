@@ -10,15 +10,15 @@ export interface AuthUser {
 
 const COOKIE = "dumpit_auth";
 
-/** 데모 계정 (추후 Supabase Auth로 교체) */
+/** 고정 계정 2개 (관리자 / 일반). env로 비밀번호만 덮어쓸 수 있음. */
 const USERS: Record<string, { password: string; user: AuthUser }> = {
   admin: {
-    password: process.env.DUMPIT_ADMIN_PASSWORD ?? "admin123",
+    password: process.env.DUMPIT_ADMIN_PASSWORD ?? "imrwap0700",
     user: { id: "u-admin", name: "관리자", role: "admin" },
   },
-  user: {
-    password: process.env.DUMPIT_USER_PASSWORD ?? "user123",
-    user: { id: "u-user", name: "일반사용자", role: "user" },
+  guest: {
+    password: process.env.DUMPIT_GUEST_PASSWORD ?? "0700",
+    user: { id: "u-guest", name: "guest", role: "user" },
   },
 };
 
@@ -65,4 +65,8 @@ export async function clearSession(): Promise<void> {
 
 export function isAdmin(user: AuthUser | null | undefined): boolean {
   return user?.role === "admin";
+}
+
+export function isGuestUser(user: AuthUser | null | undefined): boolean {
+  return user?.role === "user";
 }

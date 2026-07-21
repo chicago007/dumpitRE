@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -42,9 +42,7 @@ function LoginForm() {
     >
       <div>
         <h1 className="text-lg font-semibold">Dumpit RE 로그인</h1>
-        <p className="mt-1 text-xs text-muted">
-          관리자: admin / admin123 · 일반: user / user123
-        </p>
+        <p className="mt-1 text-xs text-muted">임직원 전용 정보 시스템</p>
       </div>
       <label className="block text-xs">
         <span className="text-muted">아이디</span>

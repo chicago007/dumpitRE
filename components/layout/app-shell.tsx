@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils";
 const SITE_NOTICE =
   "본 사이트는 iM증권 임직원 전용 정보 시스템입니다. 인가되지 않은 자의 접근 및 내부 정보의 무단 유출 시 관련 법령에 의해 처벌받을 수 있습니다.";
 
+const SITE_USAGE_NOTE =
+  "※ 과도한 조회 발생 시 접속이 차단될 수 있으므로, 원활한 이용을 위해 필요한 정보만 조회해 주시기 바랍니다.";
+
 function isAdminSection(pathname: string) {
   return (
     pathname === "/admin" ||
@@ -23,16 +26,19 @@ function isAdminSection(pathname: string) {
 function SiteNotice() {
   const boxRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLParagraphElement>(null);
+  const noteRef = useRef<HTMLParagraphElement>(null);
 
   const fit = useCallback(() => {
     const box = boxRef.current;
-    const text = textRef.current;
-    if (!box || !text) return;
-    let size = 12;
-    text.style.fontSize = `${size}px`;
-    while (size > 8 && text.scrollWidth > box.clientWidth) {
-      size -= 0.25;
+    if (!box) return;
+    for (const text of [textRef.current, noteRef.current]) {
+      if (!text) continue;
+      let size = text === textRef.current ? 12 : 11;
       text.style.fontSize = `${size}px`;
+      while (size > 8 && text.scrollWidth > box.clientWidth) {
+        size -= 0.25;
+        text.style.fontSize = `${size}px`;
+      }
     }
   }, []);
 
@@ -49,9 +55,15 @@ function SiteNotice() {
     <div ref={boxRef} className="min-w-0 flex-1 overflow-hidden">
       <p
         ref={textRef}
-        className="whitespace-nowrap text-[12px] leading-none text-red-600"
+        className="whitespace-nowrap text-[12px] leading-tight text-red-600"
       >
         {SITE_NOTICE}
+      </p>
+      <p
+        ref={noteRef}
+        className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-red-600"
+      >
+        {SITE_USAGE_NOTE}
       </p>
     </div>
   );

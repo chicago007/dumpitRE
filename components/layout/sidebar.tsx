@@ -51,6 +51,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/portfolio", label: "사업장관리", icon: Table2 },
   { href: "/admin/progress", label: "공정율 현황", icon: ClipboardList },
   { href: "/admin/review", label: "검토 대기함", icon: Inbox },
+  { href: "/admin/login-logs", label: "로그인 기록", icon: LogIn },
   { href: "/upload", label: "업로드", icon: Upload },
   { href: "/chat", label: "Q&A", icon: MessageSquare },
 ];
