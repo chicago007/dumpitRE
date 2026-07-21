@@ -3,6 +3,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { RequireAuth } from "@/components/auth/require-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,7 @@ export function AppShell({ title, children, action }: AppShellProps) {
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
   return (
+    <RequireAuth>
     <div className="flex h-dvh overflow-hidden">
       {mobileNavOpen ? (
         <button
@@ -121,5 +123,6 @@ export function AppShell({ title, children, action }: AppShellProps) {
         </main>
       </div>
     </div>
+    </RequireAuth>
   );
 }

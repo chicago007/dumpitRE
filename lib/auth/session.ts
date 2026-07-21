@@ -8,7 +8,7 @@ export interface AuthUser {
   role: UserRole;
 }
 
-const COOKIE = "dumpit_auth";
+export const AUTH_COOKIE = "dumpit_auth";
 
 /** 고정 계정 2개 (관리자 / 일반). env로 비밀번호만 덮어쓸 수 있음. */
 const USERS: Record<string, { password: string; user: AuthUser }> = {
@@ -32,11 +32,12 @@ function encode(user: AuthUser): string {
   return Buffer.from(JSON.stringify(user), "utf8").toString("base64url");
 }
 
-function decode(raw: string | undefined): AuthUser | null {
+export function parseSessionCookie(raw: string | undefined): AuthUser | null {
   if (!raw) return null;
   try {
     const user = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as AuthUser;
     if (user.role !== "admin" && user.role !== "user") return null;
+    if (!user.id || !user.name) return null;
     return user;
   } catch {
     return null;
@@ -45,12 +46,12 @@ function decode(raw: string | undefined): AuthUser | null {
 
 export async function getSessionUser(): Promise<AuthUser | null> {
   const jar = await cookies();
-  return decode(jar.get(COOKIE)?.value);
+  return parseSessionCookie(jar.get(AUTH_COOKIE)?.value);
 }
 
 export async function setSessionUser(user: AuthUser): Promise<void> {
   const jar = await cookies();
-  jar.set(COOKIE, encode(user), {
+  jar.set(AUTH_COOKIE, encode(user), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
@@ -60,7 +61,7 @@ export async function setSessionUser(user: AuthUser): Promise<void> {
 
 export async function clearSession(): Promise<void> {
   const jar = await cookies();
-  jar.delete(COOKIE);
+  jar.delete(AUTH_COOKIE);
 }
 
 export function isAdmin(user: AuthUser | null | undefined): boolean {

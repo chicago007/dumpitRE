@@ -99,10 +99,19 @@ function NavSubLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-function OverviewNavGroup({ pathname }: { pathname: string }) {
+function OverviewNavGroup({
+  pathname,
+  isAdmin,
+}: {
+  pathname: string;
+  isAdmin: boolean;
+}) {
+  const visibleSubNav = overviewSubNav.filter(
+    (item) => item.href !== "/management/fee-trend" || isAdmin
+  );
   const parentActive =
     pathname === "/management" ||
-    overviewSubNav.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+    visibleSubNav.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   const Icon = ClipboardList;
 
   return (
@@ -120,7 +129,7 @@ function OverviewNavGroup({ pathname }: { pathname: string }) {
         <span className="leading-tight">전체 현황</span>
       </Link>
       <div className="ml-5 flex flex-col gap-0.5 border-l border-im-beige/70 py-0.5 pl-2">
-        {overviewSubNav.map((item) => (
+        {visibleSubNav.map((item) => (
           <NavSubLink key={item.href} item={item} pathname={pathname} />
         ))}
       </div>
@@ -202,7 +211,7 @@ export function Sidebar({
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 py-3">
         <div className="flex flex-col gap-0.5">
-          <OverviewNavGroup pathname={pathname} />
+          <OverviewNavGroup pathname={pathname} isAdmin={isAdmin} />
           <InterestNavGroup pathname={pathname} />
         </div>
 
