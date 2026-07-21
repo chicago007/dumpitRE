@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { RequireAdmin } from "@/components/auth/require-admin";
 import {
   filterFundsByStatus,
   LabStatusFilterTabs,
@@ -18,24 +19,26 @@ export default function ByEntityPage() {
   const [filter, setFilter] = useState<LabStatusFilter>("all");
 
   return (
-    <AppShell
-      title="업체별 현황"
-      action={
-        portfolio ? (
-          <LabStatusFilterTabs value={filter} onChange={setFilter} />
-        ) : undefined
-      }
-    >
-      <div className="mx-auto max-w-7xl">
-        <PortfolioPageFrame loading={loading} portfolio={portfolio}>
-          {(funds) => (
-            <EntityRankPanel
-              key={filter}
-              funds={filterFundsByStatus(funds, filter)}
-            />
-          )}
-        </PortfolioPageFrame>
-      </div>
-    </AppShell>
+    <RequireAdmin>
+      <AppShell
+        title="업체별 현황"
+        action={
+          portfolio ? (
+            <LabStatusFilterTabs value={filter} onChange={setFilter} />
+          ) : undefined
+        }
+      >
+        <div className="mx-auto max-w-7xl">
+          <PortfolioPageFrame loading={loading} portfolio={portfolio}>
+            {(funds) => (
+              <EntityRankPanel
+                key={filter}
+                funds={filterFundsByStatus(funds, filter)}
+              />
+            )}
+          </PortfolioPageFrame>
+        </div>
+      </AppShell>
+    </RequireAdmin>
   );
 }

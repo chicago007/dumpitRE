@@ -41,6 +41,14 @@ const overviewSubNav: NavItem[] = [
   { href: "/management/by-region", label: "지역별 현황", icon: Map },
 ];
 
+/** 전체 현황 서브메뉴 중 관리자만 표시 */
+const ADMIN_ONLY_OVERVIEW = new Set([
+  "/management/setup-repayment",
+  "/management/fee-trend",
+  "/management/by-entity",
+  "/management/by-region",
+]);
+
 const interestSubNav: NavItem[] = [
   { href: "/management/interest/maturity", label: "만기 캘린더", icon: CalendarClock },
   { href: "/management/interest/schedule", label: "이자 분배 스케줄", icon: Coins },
@@ -122,7 +130,7 @@ function OverviewNavGroup({
   isAdmin: boolean;
 }) {
   const visibleSubNav = overviewSubNav.filter(
-    (item) => item.href !== "/management/fee-trend" || isAdmin
+    (item) => !ADMIN_ONLY_OVERVIEW.has(item.href) || isAdmin
   );
   const parentActive =
     pathname === "/management" ||

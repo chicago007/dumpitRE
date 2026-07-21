@@ -28,14 +28,20 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 수수료 추이: 관리자만
+  // 전체 현황 일부 메뉴: 관리자만
+  const adminOnlyPaths = [
+    "/management/fee-trend",
+    "/management/setup-repayment",
+    "/management/by-entity",
+    "/management/by-region",
+  ];
   if (
-    pathname === "/management/fee-trend" ||
-    pathname.startsWith("/management/fee-trend/")
+    adminOnlyPaths.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`)
+    ) &&
+    user.role !== "admin"
   ) {
-    if (user.role !== "admin") {
-      return NextResponse.redirect(new URL("/management", req.url));
-    }
+    return NextResponse.redirect(new URL("/management", req.url));
   }
 
   return NextResponse.next();
