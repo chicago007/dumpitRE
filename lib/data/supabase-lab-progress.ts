@@ -79,6 +79,15 @@ export function labProgressRowId(
   return `${key}--nodate--${crypto.randomUUID().slice(0, 8)}`;
 }
 
+/** 기성 자료 없는 active 랩용 안정적 placeholder id */
+export function labProgressPlaceholderId(
+  labFundId: string | null,
+  labName: string
+): string {
+  const key = (labFundId ?? labName.replace(/\s+/g, "")).slice(0, 100);
+  return `${key}--placeholder`;
+}
+
 function sortByLabThenDate(a: LabProgressRow, b: LabProgressRow): number {
   const lab = b.labName.localeCompare(a.labName, "ko", { numeric: true });
   if (lab !== 0) return lab;

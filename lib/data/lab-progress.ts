@@ -4,6 +4,7 @@ import { parseGisungReport } from "@/lib/analyzers/gisung-progress";
 import { getLabPortfolio } from "@/lib/data/lab-portfolio";
 import {
   isLabProgressDbConfigured,
+  labProgressPlaceholderId,
   labProgressRowId,
   pickLatestPerLab,
   sbGetLabProgressByLabAndDate,
@@ -166,7 +167,57 @@ async function loadAllProgressRows(): Promise<LabProgressRow[]> {
   return loadLocal();
 }
 
+function buildPlaceholderFromFund(fund: LabFund): LabProgressRow {
+  return {
+    id: labProgressPlaceholderId(fund.id, fund.name),
+    labFundId: fund.id,
+    labName: fund.name,
+    fundName: fund.fundName,
+    siteAddress: fund.siteAddress,
+    plannedProgressPct: fund.plannedProgressPct,
+    actualProgressPct: fund.actualProgressPct,
+    achievementPct: null,
+    delayDays: null,
+    confirmedDate: null,
+    specialNotes: null,
+    sourceFileName: null,
+    documentId: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * 포트폴리오에 등록된 진행중(active) 랩이 공정율 표에 없으면 placeholder 행을 추가.
+ * 기성 자료가 아직 없어도 사업장이 보이도록 함.
+ */
+export async function ensureActiveLabProgressPlaceholders(): Promise<number> {
+  const portfolio = await getLabPortfolio();
+  const activeFunds = (portfolio?.funds ?? []).filter((f) => f.status === "active");
+  if (activeFunds.length === 0) return 0;
+
+  const all = await loadAllProgressRows();
+  const byFundId = new Set(
+    all.map((r) => r.labFundId).filter(Boolean) as string[]
+  );
+  const byLabKey = new Set(
+    all.map((r) => r.labName.replace(/\s+/g, "").toLowerCase())
+  );
+
+  let created = 0;
+  for (const fund of activeFunds) {
+    const labKey = fund.name.replace(/\s+/g, "").toLowerCase();
+    if (byFundId.has(fund.id) || byLabKey.has(labKey)) continue;
+    await persistRow(buildPlaceholderFromFund(fund));
+    byFundId.add(fund.id);
+    byLabKey.add(labKey);
+    created += 1;
+  }
+  return created;
+}
+
 export async function listLabProgress(): Promise<LabProgressRow[]> {
+  await ensureActiveLabProgressPlaceholders();
+
   if (isLabProgressDbConfigured()) {
     try {
       const rows = await sbListLabProgress();

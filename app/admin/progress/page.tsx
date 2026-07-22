@@ -184,7 +184,8 @@ export default function AdminProgressPage() {
       >
         <div className="mx-auto max-w-7xl space-y-4">
           <p className="text-xs text-muted">
-            기성보고서·공정확인서 기준 랩별 공정율입니다.
+            기성보고서·공정확인서 기준 랩별 공정율입니다. 진행중 사업장은 자료가 없어도
+            목록에 표시됩니다.
             {editing
               ? " 셀을 수정한 뒤 행마다 저장하세요."
               : " 상단 「수정」을 누르면 편집할 수 있습니다."}
@@ -325,9 +326,10 @@ export default function AdminProgressPage() {
                             }
                           />
                         </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            className={`${inputClass} min-w-[12rem]`}
+                        <td className="min-w-[280px] px-2 py-1.5 align-top">
+                          <textarea
+                            rows={4}
+                            className={`${inputClass} min-h-[5.5rem] min-w-[16rem] w-72 resize-y leading-snug`}
                             value={row.specialNotes ?? ""}
                             onChange={(e) =>
                               patchRow(row.id, {

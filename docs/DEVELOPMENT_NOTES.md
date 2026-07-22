@@ -1,6 +1,6 @@
 # Dumpit RE — 개발 노트
 
-> **최종 갱신:** 2026-07-21 (v1.01)  
+> **최종 갱신:** 2026-07-23 (v1.02)  
 > **대상:** 부동산랩 사업장관리 웹앱 (Next.js · Supabase · Gemini)
 
 ---
@@ -13,27 +13,28 @@
 | 사업장별(회차) | `/management/sites` | 헤더 드롭다운 · 랩 상세 · 조건 · 회차 이자 | 로그인 |
 | 분배금/만기일 | `/management/interest` | 분배·만기·중도상환 일정 · 달력 · 스케줄표 | 로그인 |
 | 만기 캘린더 | `/management/interest/maturity` | 중도상환/대출만기/펀드만기 차트 | 로그인 |
-| 설정·상환 추이 | `/management/setup-repayment` | 설정·상환 차트 | **관리자** |
-| 수수료 추이 | `/management/fee-trend` | 수수료 차트 | **관리자** |
-| 업체/지역별 | `/management/by-entity`, `by-region` | 집계 | **관리자** |
+| 설정·상환 추이 | `/management/setup-repayment` | 설정·상환 차트 | **관리자·wrap** |
+| 수수료 추이 | `/management/fee-trend` | 수수료 차트 | **관리자·wrap** |
+| 업체/지역별 | `/management/by-entity`, `by-region` | 집계 | **관리자·wrap** |
 | 상품/사업장 | `/admin` | 제안서 매칭용 마스터 | 관리자 |
 | 사업장관리 | `/admin/portfolio` | `lab_funds` CRUD | 관리자 |
-| 공정율 현황 | `/admin/progress` | 랩별 최신 공정율 | 관리자 |
+| 공정율 현황 | `/admin/progress` | 랩별 최신 공정율 · active 미등록분 placeholder | 관리자 |
 | 검토 대기함 | `/admin/review` | 업로드 후 수동 처리 큐 | 관리자 |
 | 로그인 기록 | `/admin/login-logs` | guest 접속 IP·시각 | 관리자 |
 | 업로드 | `/upload` | 관리현황 · 제안서 · 공정율 | 관리자 |
 
 ---
 
-## 2. 인증 (v1.01)
+## 2. 인증 (v1.02)
 
 - **로그인 필수**: `middleware.ts` — `/login`, `/api/auth/*` 제외 전 경로
 - **계정** (비밀번호는 코드에 없음, `.env.local` / Vercel env)
-  - `admin` — 관리자 (관리자 메뉴 + 제한된 분석 메뉴)
+  - `admin` — 관리자 (관리자 메뉴 + 전체 현황 전체)
   - `wrap` — 일반 + 전체 현황 서브메뉴 전체 (설정·상환/수수료/업체별/지역별)
-  - `guest` — 일반 (조회 위주)
+  - `guest` — 일반 (조회 위주, 제한 메뉴 제외)
 - **환경 변수**: `DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD`, `DUMPIT_WRAP_PASSWORD`
 - **guest 로그인 로그**: Supabase `guest_login_logs` 또는 로컬 `.data/guest-login-logs.json`
+- **폰트**: Pretendard CDN (`cdn.jsdelivr.net/npm/pretendard`)
 
 ---
 
@@ -52,8 +53,10 @@
 
 - **랩 × 확인일** 1행 (unique: `lab_name, confirmed_date`)
 - 공정율 현황 = 랩별 **최신 확인일** 1건
+- **active 랩**에 공정 행이 없으면 `{id}--placeholder` 행을 자동 생성 (`ensureActiveLabProgressPlaceholders`)
 - 이력: `GET /api/lab-progress?history=1&labName=…`
 - 미제출: `GET /api/lab-progress?missing=1` (active 랩 × 해당 월)
+- 시드 스크립트: `npx tsx scripts/seed-progress-placeholders.mts`
 
 ### 3.3 `product_master` / `review_queue`
 
@@ -66,10 +69,10 @@
 |---------|-----------|------|
 | `early_repayment_date` | **중도상환일** / 중도상환(예정)일 | 예정·중도 상환 (별도 필드) |
 | `repayment_date` | **상환일** | 확정 상환 · 상환완료 판별에 사용 |
-| `loan_maturity_date` | 대출만기일 | 상환일 있으면 UI에서 숨김 |
-| `maturity_date` | 펀드만기일 | 상환일 있으면 UI에서 숨김 |
+| `loan_maturity_date` | 대출만기일 | 사업장별 상세에서는 항상 표시 |
+| `maturity_date` | 펀드만기일 | 사업장별 상세에서는 항상 표시 |
 
-`repayment_date`가 있으면 **대출·펀드 만기일·분배금 지급일은 화면에 표시하지 않음** (DB 값은 유지).
+분배금/만기일 스케줄·일부 목록에서는 상환일이 있으면 대출·펀드 만기·회차 지급일을 숨길 수 있음 (DB 값은 유지).
 
 ### 3.5 표시 규칙
 
@@ -97,6 +100,7 @@
 3. Vercel 배포 시 동일 env 설정 후 재배포
 4. 관리현황 엑셀 업로드 → 사업장관리 확인
 5. guest 로그인 → `/admin/login-logs`에서 기록 확인
+6. (선택) 공정율 placeholder 시드: `npx tsx scripts/seed-progress-placeholders.mts`
 
 ---
 
