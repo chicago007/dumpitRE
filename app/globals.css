@@ -30,7 +30,9 @@
   --color-warning: #ca8a04;
   --color-danger: #dc2626;
   --color-table-head: #f3f2ec;
-  --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
+  /* Latin → JetBrains Mono, Hangul → D2Coding */
+  --font-sans: var(--font-jetbrains-mono), var(--font-d2coding), ui-monospace, monospace;
+  --font-mono: var(--font-jetbrains-mono), var(--font-d2coding), ui-monospace, monospace;
 }
 
 html,
