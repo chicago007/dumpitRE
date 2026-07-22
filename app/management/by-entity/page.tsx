@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { RequireAdmin } from "@/components/auth/require-admin";
+import { RequireFullOverview } from "@/components/auth/require-full-overview";
 import {
   filterFundsByStatus,
   LabStatusFilterTabs,
@@ -19,7 +19,7 @@ export default function ByEntityPage() {
   const [filter, setFilter] = useState<LabStatusFilter>("all");
 
   return (
-    <RequireAdmin>
+    <RequireFullOverview>
       <AppShell
         title="업체별 현황"
         action={
@@ -39,6 +39,6 @@ export default function ByEntityPage() {
           </PortfolioPageFrame>
         </div>
       </AppShell>
-    </RequireAdmin>
+    </RequireFullOverview>
   );
 }

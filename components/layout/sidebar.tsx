@@ -41,7 +41,7 @@ const overviewSubNav: NavItem[] = [
   { href: "/management/by-region", label: "지역별 현황", icon: Map },
 ];
 
-/** 전체 현황 서브메뉴 중 관리자만 표시 */
+/** 전체 현황 서브메뉴 중 관리자·wrap만 표시 */
 const ADMIN_ONLY_OVERVIEW = new Set([
   "/management/setup-repayment",
   "/management/fee-trend",
@@ -124,13 +124,13 @@ function NavSubLink({ item, pathname }: { item: NavItem; pathname: string }) {
 
 function OverviewNavGroup({
   pathname,
-  isAdmin,
+  canViewFullOverview,
 }: {
   pathname: string;
-  isAdmin: boolean;
+  canViewFullOverview: boolean;
 }) {
   const visibleSubNav = overviewSubNav.filter(
-    (item) => !ADMIN_ONLY_OVERVIEW.has(item.href) || isAdmin
+    (item) => !ADMIN_ONLY_OVERVIEW.has(item.href) || canViewFullOverview
   );
   const parentActive =
     pathname === "/management" ||
@@ -196,7 +196,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, loading, isAdmin, logout } = useAuth();
+  const { user, loading, isAdmin, canViewFullOverview, logout } = useAuth();
   const onMobileCloseRef = useRef(onMobileClose);
   onMobileCloseRef.current = onMobileClose;
 
@@ -234,7 +234,7 @@ export function Sidebar({
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 py-3">
         <div className="flex flex-col gap-0.5">
-          <OverviewNavGroup pathname={pathname} isAdmin={isAdmin} />
+          <OverviewNavGroup pathname={pathname} canViewFullOverview={canViewFullOverview} />
           <InterestNavGroup pathname={pathname} />
         </div>
 

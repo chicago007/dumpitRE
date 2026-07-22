@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE, parseSessionCookie } from "@/lib/auth/session";
+import { AUTH_COOKIE, canViewFullOverview, parseSessionCookie } from "@/lib/auth/session";
 
 function isPublicPath(pathname: string) {
   if (pathname === "/login") return true;
@@ -28,18 +28,18 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 전체 현황 일부 메뉴: 관리자만
-  const adminOnlyPaths = [
+  // 전체 현황 일부 메뉴: 관리자 또는 wrap
+  const overviewRestrictedPaths = [
     "/management/fee-trend",
     "/management/setup-repayment",
     "/management/by-entity",
     "/management/by-region",
   ];
   if (
-    adminOnlyPaths.some(
+    overviewRestrictedPaths.some(
       (p) => pathname === p || pathname.startsWith(`${p}/`)
     ) &&
-    user.role !== "admin"
+    !canViewFullOverview(user)
   ) {
     return NextResponse.redirect(new URL("/management", req.url));
   }

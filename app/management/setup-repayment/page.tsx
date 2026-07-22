@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { RequireAdmin } from "@/components/auth/require-admin";
+import { RequireFullOverview } from "@/components/auth/require-full-overview";
 import { SetupRepaymentPanel } from "@/components/management/portfolio-analytics";
 import {
   PortfolioPageFrame,
@@ -12,7 +12,7 @@ export default function SetupRepaymentPage() {
   const { portfolio, loading } = useLabPortfolio();
 
   return (
-    <RequireAdmin>
+    <RequireFullOverview>
       <AppShell title="설정·상환 추이">
         <div className="mx-auto max-w-7xl">
           <PortfolioPageFrame loading={loading} portfolio={portfolio}>
@@ -20,6 +20,6 @@ export default function SetupRepaymentPage() {
           </PortfolioPageFrame>
         </div>
       </AppShell>
-    </RequireAdmin>
+    </RequireFullOverview>
   );
 }

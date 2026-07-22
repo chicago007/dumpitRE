@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { RequireAdmin } from "@/components/auth/require-admin";
+import { RequireFullOverview } from "@/components/auth/require-full-overview";
 import { FeeTrendPanel } from "@/components/management/portfolio-analytics";
 import {
   PortfolioPageFrame,
@@ -12,7 +12,7 @@ export default function FeeTrendPage() {
   const { portfolio, loading } = useLabPortfolio();
 
   return (
-    <RequireAdmin>
+    <RequireFullOverview>
       <AppShell title="수수료 추이">
         <div className="mx-auto max-w-7xl">
           <PortfolioPageFrame loading={loading} portfolio={portfolio}>
@@ -20,6 +20,6 @@ export default function FeeTrendPage() {
           </PortfolioPageFrame>
         </div>
       </AppShell>
-    </RequireAdmin>
+    </RequireFullOverview>
   );
 }

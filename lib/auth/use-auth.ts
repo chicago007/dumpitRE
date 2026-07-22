@@ -29,6 +29,7 @@ export function useAuth() {
     user,
     loading,
     isAdmin: user?.role === "admin",
+    canViewFullOverview: user?.role === "admin" || user?.id === "u-wrap",
     isLoggedIn: Boolean(user),
     refresh,
     logout,

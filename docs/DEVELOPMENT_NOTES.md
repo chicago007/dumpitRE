@@ -30,8 +30,9 @@
 - **로그인 필수**: `middleware.ts` — `/login`, `/api/auth/*` 제외 전 경로
 - **계정** (비밀번호는 코드에 없음, `.env.local` / Vercel env)
   - `admin` — 관리자 (관리자 메뉴 + 제한된 분석 메뉴)
+  - `wrap` — 일반 + 전체 현황 서브메뉴 전체 (설정·상환/수수료/업체별/지역별)
   - `guest` — 일반 (조회 위주)
-- **환경 변수**: `DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD`
+- **환경 변수**: `DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD`, `DUMPIT_WRAP_PASSWORD`
 - **guest 로그인 로그**: Supabase `guest_login_logs` 또는 로컬 `.data/guest-login-logs.json`
 
 ---
@@ -92,7 +93,7 @@
 ## 5. 운영 체크리스트
 
 1. Supabase SQL: `001` → `007` 순서 실행
-2. `.env.local`: Supabase + `DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD` + (선택) Gemini, Drive
+2. `.env.local`: Supabase + `DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD`, `DUMPIT_WRAP_PASSWORD` + (선택) Gemini, Drive
 3. Vercel 배포 시 동일 env 설정 후 재배포
 4. 관리현황 엑셀 업로드 → 사업장관리 확인
 5. guest 로그인 → `/admin/login-logs`에서 기록 확인

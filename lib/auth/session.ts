@@ -24,6 +24,10 @@ const USERS: Record<string, { password: string; user: AuthUser }> = {
     password: envPassword("DUMPIT_GUEST_PASSWORD"),
     user: { id: "u-guest", name: "guest", role: "user" },
   },
+  wrap: {
+    password: envPassword("DUMPIT_WRAP_PASSWORD"),
+    user: { id: "u-wrap", name: "wrap", role: "user" },
+  },
 };
 
 export function authenticate(username: string, password: string): AuthUser | null {
@@ -74,4 +78,9 @@ export function isAdmin(user: AuthUser | null | undefined): boolean {
 
 export function isGuestUser(user: AuthUser | null | undefined): boolean {
   return user?.role === "user";
+}
+
+/** 전체 현황 서브메뉴(설정·상환/수수료/업체별/지역별) — 관리자 또는 wrap */
+export function canViewFullOverview(user: AuthUser | null | undefined): boolean {
+  return user?.role === "admin" || user?.id === "u-wrap";
 }
