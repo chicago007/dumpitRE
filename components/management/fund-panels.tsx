@@ -237,12 +237,8 @@ export function LabRoundDetail({
     { label: "수수료율", value: formatRate(fund.feeRate) },
     { label: "설정일", value: v(fund.setupDate) },
     { label: "중도상환(예정)일", value: v(fund.earlyRepaymentDate) },
-    ...(repaid
-      ? []
-      : [
-          { label: "대출만기일", value: v(fund.loanMaturityDate) },
-          { label: "펀드만기일", value: v(fund.maturityDate) },
-        ]),
+    { label: "대출만기일", value: v(fund.loanMaturityDate) },
+    { label: "펀드만기일", value: v(fund.maturityDate) },
     { label: "신탁사", value: v(fund.trustCompany) },
     { label: "신탁방식", value: v(fund.trustType) },
     { label: "시행사", value: fund.developer },
