@@ -572,7 +572,7 @@ function InterestScheduleChart({
 
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="min-w-full" role="img" aria-label="이자 분배 스케줄">
+      <svg viewBox={`0 0 ${w} ${h}`} className="min-w-full" role="img" aria-label="분배금 캘린더">
         {rows.map((row, i) => {
           const x = pad.left + i * (barW + 8);
           const bh = (row.paymentCount / max) * innerH;
@@ -1141,7 +1141,7 @@ export function InterestSchedulePanel({ funds }: { funds: LabFund[] }) {
 
   return (
     <ChartCard
-      title="이자 분배 스케줄"
+      title="분배금 캘린더"
       subtitle={
         periodMode === "year" ? "회차별 지급일 연도별 집계" : "회차별 지급일 월별 집계"
       }

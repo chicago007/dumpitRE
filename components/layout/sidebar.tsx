@@ -52,7 +52,7 @@ const ADMIN_ONLY_OVERVIEW = new Set([
 
 const interestSubNav: NavItem[] = [
   { href: "/management/interest/maturity", label: "만기 캘린더", icon: CalendarClock },
-  { href: "/management/interest/schedule", label: "이자 분배 스케줄", icon: Coins },
+  { href: "/management/interest/schedule", label: "분배금 캘린더", icon: Coins },
 ];
 
 const adminNav: NavItem[] = [
@@ -178,7 +178,7 @@ function InterestNavGroup({ pathname }: { pathname: string }) {
         )}
       >
         <Icon className={cn("h-4 w-4 shrink-0", parentActive && "text-sidebar-active")} />
-        <span className="leading-tight">분배금/만기일</span>
+        <span className="leading-tight">분배금·만기일</span>
       </Link>
       <div className="ml-5 flex flex-col gap-0.5 border-l border-im-beige/70 py-0.5 pl-2">
         {interestSubNav.map((item) => (
@@ -227,7 +227,7 @@ export function Sidebar({
           </p>
           <p className="mt-0.5 flex items-baseline gap-1 whitespace-nowrap">
             <span className="text-accent text-[15px] font-bold tracking-tight">
-              부동산랩 사업장관리
+              부동산랩 현황관리
             </span>
             <span className="shrink-0 text-[11px] font-medium text-slate-400">{APP_VERSION}</span>
           </p>

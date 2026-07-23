@@ -11,7 +11,7 @@ export default function InterestSchedulePage() {
   const { portfolio, loading } = useLabPortfolio();
 
   return (
-    <AppShell title="이자 분배 스케줄">
+    <AppShell title="분배금 캘린더">
       <div className="mx-auto max-w-7xl">
         <PortfolioPageFrame loading={loading} portfolio={portfolio}>
           {(funds) => <InterestSchedulePanel funds={funds} />}

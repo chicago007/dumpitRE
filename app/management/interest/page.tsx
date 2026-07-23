@@ -286,7 +286,7 @@ export default function InterestPage() {
   }
 
   return (
-    <AppShell title="분배금/만기일 확인" action={portfolio ? viewTabs : undefined}>
+    <AppShell title="분배금·만기일 확인" action={portfolio ? viewTabs : undefined}>
       <div className="mx-auto max-w-7xl space-y-6">
         {loading && !portfolio ? (
           <p className="text-sm text-muted">불러오는 중…</p>
