@@ -442,16 +442,21 @@ function MaturityTimelineChart({
     return <EmptyChart message="만기일 데이터가 없습니다." />;
   }
 
-  const visibleTotal = (r: MaturityMonthRow) =>
+  const visibleCount = (r: MaturityMonthRow) =>
     (showEarly ? r.earlyCount : 0) +
     (showLoan ? r.loanCount : 0) +
     (showFund ? r.fundCount : 0);
 
-  const max = Math.max(...rows.map(visibleTotal), 1);
+  const visibleAmount = (r: MaturityMonthRow) =>
+    (showEarly ? r.earlyAmount : 0) +
+    (showLoan ? r.loanAmount : 0) +
+    (showFund ? r.fundAmount : 0);
+
+  const max = Math.max(...rows.map(visibleAmount), 1);
   const barW = Math.min(24, Math.max(10, 480 / rows.length));
   const w = Math.max(400, rows.length * (barW + 8) + 48);
   const h = 200;
-  const pad = { top: 16, right: 12, bottom: 36, left: 32 };
+  const pad = { top: 24, right: 12, bottom: 36, left: 32 };
   const innerH = h - pad.top - pad.bottom;
 
   return (
@@ -459,11 +464,35 @@ function MaturityTimelineChart({
       <svg viewBox={`0 0 ${w} ${h}`} className="min-w-full" role="img" aria-label="만기 캘린더">
         {rows.map((row, i) => {
           const x = pad.left + i * (barW + 8);
-          const earlyH = showEarly ? (row.earlyCount / max) * innerH : 0;
-          const loanH = showLoan ? (row.loanCount / max) * innerH : 0;
-          const fundH = showFund ? (row.fundCount / max) * innerH : 0;
+          const count = visibleCount(row);
           const selected = selectedKey === row.key;
-          const hasData = visibleTotal(row) > 0;
+          const hasData = count > 0;
+          // 금액이 0이어도 건수가 있으면 최소 높이로 표시
+          const scaleEarly = showEarly
+            ? row.earlyAmount > 0
+              ? row.earlyAmount
+              : row.earlyCount > 0
+                ? max * 0.04
+                : 0
+            : 0;
+          const scaleLoan = showLoan
+            ? row.loanAmount > 0
+              ? row.loanAmount
+              : row.loanCount > 0
+                ? max * 0.04
+                : 0
+            : 0;
+          const scaleFund = showFund
+            ? row.fundAmount > 0
+              ? row.fundAmount
+              : row.fundCount > 0
+                ? max * 0.04
+                : 0
+            : 0;
+          const earlyH = (scaleEarly / max) * innerH;
+          const loanH = (scaleLoan / max) * innerH;
+          const fundH = (scaleFund / max) * innerH;
+          const totalH = earlyH + loanH + fundH;
           return (
             <g
               key={row.key}
@@ -483,38 +512,51 @@ function MaturityTimelineChart({
                   opacity={0.08}
                 />
               ) : null}
-              {showEarly && row.earlyCount > 0 ? (
+              {showEarly && (row.earlyAmount > 0 || row.earlyCount > 0) ? (
                 <rect
                   x={x}
                   y={pad.top + innerH - earlyH - loanH - fundH}
                   width={barW}
-                  height={earlyH}
+                  height={Math.max(earlyH, 1)}
                   rx={2}
                   fill="#f59e0b"
                   opacity={selected || !selectedKey ? 1 : 0.45}
                 />
               ) : null}
-              {showLoan && row.loanCount > 0 ? (
+              {showLoan && (row.loanAmount > 0 || row.loanCount > 0) ? (
                 <rect
                   x={x}
                   y={pad.top + innerH - loanH - fundH}
                   width={barW}
-                  height={loanH}
+                  height={Math.max(loanH, 1)}
                   rx={2}
                   fill="#7db5ff"
                   opacity={selected || !selectedKey ? 1 : 0.45}
                 />
               ) : null}
-              {showFund && row.fundCount > 0 ? (
+              {showFund && (row.fundAmount > 0 || row.fundCount > 0) ? (
                 <rect
                   x={x}
                   y={pad.top + innerH - fundH}
                   width={barW}
-                  height={fundH}
+                  height={Math.max(fundH, 1)}
                   rx={2}
                   fill="#53e1e5"
                   opacity={selected || !selectedKey ? 1 : 0.45}
                 />
+              ) : null}
+              {count > 0 ? (
+                <text
+                  x={x + barW / 2}
+                  y={pad.top + innerH - totalH - 4}
+                  textAnchor="middle"
+                  className={cn(
+                    "text-[9px] tabular-nums",
+                    selected ? "fill-foreground font-semibold" : "fill-muted"
+                  )}
+                >
+                  {count}
+                </text>
               ) : null}
               <text
                 x={x + barW / 2}
@@ -541,7 +583,7 @@ function MaturityTimelineChart({
           <span className="h-2.5 w-2.5 rounded-sm bg-im-light-blue" /> 펀드만기 (
           {rows.reduce((s, r) => s + r.fundCount, 0)}건)
         </span>
-        <span className="text-muted/80">막대를 클릭하면 상세 목록이 표시됩니다.</span>
+        <span className="text-muted/80">막대 높이=금액 · 숫자=건수 · 클릭 시 상세</span>
       </div>
     </div>
   );
@@ -1047,7 +1089,11 @@ export function MaturitySchedulePanel({ funds }: { funds: LabFund[] }) {
   return (
     <ChartCard
       title="중도상환 · 대출만기 · 펀드만기 캘린더"
-      subtitle={periodMode === "year" ? "연도별 만기·상환 예정 건수" : "월별 만기·상환 예정 건수"}
+      subtitle={
+        periodMode === "year"
+          ? "연도별 만기·상환 예정 금액 (막대 위 숫자=건수)"
+          : "월별 만기·상환 예정 금액 (막대 위 숫자=건수)"
+      }
       action={
         <div className="flex flex-wrap items-center gap-2">
           {kindToggle}

@@ -225,11 +225,10 @@ export function Sidebar({
           <p className="text-xs font-semibold tracking-tight text-im-gray">
             LH/SH/GH 매입약정
           </p>
-          <p className="mt-0.5 flex items-baseline gap-1 whitespace-nowrap">
+          <p className="mt-0.5">
             <span className="text-accent text-[15px] font-bold tracking-tight">
               부동산랩 현황관리
             </span>
-            <span className="shrink-0 text-[11px] font-medium text-slate-400">{APP_VERSION}</span>
           </p>
         </Link>
         <div className="mt-3 h-1 w-12 rounded-full bg-accent opacity-80" aria-hidden />
@@ -259,7 +258,8 @@ export function Sidebar({
         ) : user ? (
           <>
             <p className="text-xs text-sidebar-muted">
-              {user.role === "admin" ? "관리자 모드" : "일반 모드"}
+              {user.role === "admin" ? "관리자 모드" : "일반 모드"}{" "}
+              <span className="text-slate-400">({APP_VERSION})</span>
             </p>
             <p className="text-sm font-medium text-sidebar-foreground">{user.name}</p>
             <button
@@ -273,7 +273,9 @@ export function Sidebar({
           </>
         ) : (
           <>
-            <p className="text-xs text-sidebar-muted">로그인 필요</p>
+            <p className="text-xs text-sidebar-muted">
+              로그인 필요 <span className="text-slate-400">({APP_VERSION})</span>
+            </p>
             <Link
               href="/login"
               className="flex items-center gap-1.5 text-xs text-sidebar-active hover:underline"
