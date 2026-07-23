@@ -135,8 +135,23 @@ export interface LabFund {
   note: string | null;
   /** 관리자 입력 진행현황 코멘트 */
   progressComment: string | null;
+  /** 진행현황 첨부(인허가 PDF·사진 등) */
+  progressAttachments: ProgressAttachment[];
   interestPayments: LabInterestPayment[];
   status: LabFundStatus;
+}
+
+/** 사업장별 진행현황에 붙인 파일 */
+export interface ProgressAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  /** Drive webViewLink 또는 로컬 API URL */
+  url: string;
+  driveFileId?: string | null;
+  /** 로컬 uploads 상대 경로 (Drive 미사용 시) */
+  localPath?: string | null;
+  uploadedAt: string;
 }
 
 export interface LabPortfolioSnapshot {

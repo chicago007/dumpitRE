@@ -253,6 +253,7 @@ export function parseLabStatusExcel(
       vsPlan: cellToString(get("vsPlan")),
       note: cellToString(get("note")),
       progressComment: cellToString(get("progressComment")),
+      progressAttachments: [],
       interestPayments,
       status,
     };

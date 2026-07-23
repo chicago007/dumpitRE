@@ -199,6 +199,9 @@ function normalizeFund(f: LabFund): LabFund {
     developer: f.developer ?? null,
     contractor: f.contractor ?? null,
     progressComment: f.progressComment ?? null,
+    progressAttachments: Array.isArray(f.progressAttachments)
+      ? f.progressAttachments
+      : [],
     interestPayments: f.interestPayments ?? [],
   };
   return {
@@ -342,6 +345,65 @@ export async function updateLabFundProgressComment(
   return updateLabFund(fundId, { progressComment: progressComment.trim() || null });
 }
 
+export async function addLabFundProgressAttachment(
+  fundId: string,
+  attachment: import("@/lib/types").ProgressAttachment
+): Promise<LabFund | null> {
+  const portfolio = await getLabPortfolio();
+  const fund = portfolio?.funds.find((f) => f.id === fundId);
+  if (!fund) return null;
+  const nextFund: LabFund = normalizeFund({
+    ...fund,
+    progressAttachments: [...(fund.progressAttachments ?? []), attachment],
+  });
+
+  // 첨부는 DB 컬럼이 있어야 하므로, 설정돼 있으면 로컬 폴백 없이 실패를 그대로 올린다.
+  if (isLabPortfolioDbConfigured()) {
+    await sbUpsertLabFund(nextFund);
+    const funds = portfolio.funds.map((f) => (f.id === fundId ? nextFund : f));
+    snapshot = {
+      ...portfolio,
+      funds,
+      stats: recomputeStats(funds),
+      uploadedAt: new Date().toISOString(),
+    };
+    persistSnapshot();
+    return nextFund;
+  }
+
+  return updateLabFund(fundId, { progressAttachments: nextFund.progressAttachments });
+}
+
+export async function removeLabFundProgressAttachment(
+  fundId: string,
+  attachmentId: string
+): Promise<LabFund | null> {
+  const portfolio = await getLabPortfolio();
+  const fund = portfolio?.funds.find((f) => f.id === fundId);
+  if (!fund) return null;
+  const nextFund: LabFund = normalizeFund({
+    ...fund,
+    progressAttachments: (fund.progressAttachments ?? []).filter(
+      (a) => a.id !== attachmentId
+    ),
+  });
+
+  if (isLabPortfolioDbConfigured()) {
+    await sbUpsertLabFund(nextFund);
+    const funds = portfolio.funds.map((f) => (f.id === fundId ? nextFund : f));
+    snapshot = {
+      ...portfolio,
+      funds,
+      stats: recomputeStats(funds),
+      uploadedAt: new Date().toISOString(),
+    };
+    persistSnapshot();
+    return nextFund;
+  }
+
+  return updateLabFund(fundId, { progressAttachments: nextFund.progressAttachments });
+}
+
 export async function deleteLabFundById(fundId: string): Promise<LabFund | null> {
   if (isLabPortfolioDbConfigured()) {
     try {
@@ -481,6 +543,7 @@ export async function upsertLabFundFromProposal(input: {
         vsPlan: null,
         note: input.notes ?? null,
         progressComment: null,
+        progressAttachments: [],
         interestPayments: [],
         status: "active",
       })

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { LabFund } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import type { LabFund, LabProgressRow, ProgressAttachment } from "@/lib/types";
 import { formatRate, hasRepaymentDate, isRepaidFund } from "@/lib/lab/portfolio-ui";
 import { formatBalance, formatCurrency, cn } from "@/lib/utils";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
@@ -20,6 +20,124 @@ function isUpcoming(date: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return d >= today;
+}
+
+function formatChartDate(iso: string | null): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return "미확인";
+  const [, m, d] = iso.slice(0, 10).split("-");
+  return `${Number(m)}/${Number(d)}`;
+}
+
+/** 확인일별 계획·실적 막대 시계열 */
+function ProgressHistoryBarChart({ rows }: { rows: LabProgressRow[] }) {
+  const n = rows.length;
+  const groupW = 56;
+  const gap = 18;
+  const pad = { top: 20, right: 12, bottom: 36, left: 36 };
+  const barW = 14;
+  const pairGap = 4;
+  const chartW = Math.max(320, pad.left + pad.right + n * (groupW + gap) - gap);
+  const chartH = 200;
+  const innerH = chartH - pad.top - pad.bottom;
+  const maxY = 100;
+
+  const y = (v: number) => pad.top + innerH - (Math.min(maxY, Math.max(0, v)) / maxY) * innerH;
+  const groupX = (i: number) => pad.left + i * (groupW + gap);
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${chartW} ${chartH}`}
+        className="min-w-full"
+        style={{ minWidth: chartW, height: chartH }}
+        role="img"
+        aria-label="월별 공정율 막대그래프"
+      >
+        {[0, 25, 50, 75, 100].map((tick) => (
+          <g key={tick}>
+            <line
+              x1={pad.left}
+              x2={chartW - pad.right}
+              y1={y(tick)}
+              y2={y(tick)}
+              stroke="#e5e3da"
+              strokeWidth={1}
+            />
+            <text
+              x={pad.left - 8}
+              y={y(tick) + 3}
+              textAnchor="end"
+              fontSize={10}
+              fill="#666666"
+            >
+              {tick}
+            </text>
+          </g>
+        ))}
+        {rows.map((row, i) => {
+          const gx = groupX(i);
+          const planned = row.plannedProgressPct;
+          const actual = row.actualProgressPct;
+          const plannedH =
+            planned == null ? 0 : ((Math.min(maxY, Math.max(0, planned)) / maxY) * innerH);
+          const actualH =
+            actual == null ? 0 : ((Math.min(maxY, Math.max(0, actual)) / maxY) * innerH);
+          const base = pad.top + innerH;
+          const plannedX = gx + (groupW - barW * 2 - pairGap) / 2;
+          const actualX = plannedX + barW + pairGap;
+          return (
+            <g key={row.id}>
+              {planned != null ? (
+                <rect
+                  x={plannedX}
+                  y={base - plannedH}
+                  width={barW}
+                  height={Math.max(plannedH, 1)}
+                  rx={2}
+                  fill="#cdc9b7"
+                />
+              ) : null}
+              {actual != null ? (
+                <rect
+                  x={actualX}
+                  y={base - actualH}
+                  width={barW}
+                  height={Math.max(actualH, 1)}
+                  rx={2}
+                  fill="#00c7a9"
+                />
+              ) : null}
+              <text
+                x={gx + groupW / 2}
+                y={chartH - 18}
+                textAnchor="middle"
+                fontSize={10}
+                fill="#666666"
+              >
+                {formatChartDate(row.confirmedDate)}
+              </text>
+              {(actual != null || planned != null) && (
+                <text
+                  x={gx + groupW / 2}
+                  y={chartH - 6}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="#00a892"
+                  className="tabular-nums"
+                >
+                  {actual != null
+                    ? `${actual.toFixed(1)}%`
+                    : planned != null
+                      ? `계 ${planned.toFixed(1)}%`
+                      : ""}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
 }
 
 /** 공정율 또는 상환완료 표시 */
@@ -169,6 +287,159 @@ export function LabRoundBoard({ funds }: { funds: LabFund[] }) {
   );
 }
 
+/** PDF 첫 페이지를 캔버스로 렌더한 실제 내용 썸네일 */
+function PdfContentThumb({
+  contentUrl,
+  fileName,
+}: {
+  contentUrl: string;
+  fileName: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+
+    (async () => {
+      const pdfjs = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url
+      ).toString();
+
+      const res = await fetch(contentUrl, { credentials: "include" });
+      if (!res.ok) throw new Error(`fetch ${res.status}`);
+      const data = new Uint8Array(await res.arrayBuffer());
+      const doc = await pdfjs.getDocument({ data }).promise;
+      const page = await doc.getPage(1);
+      const base = page.getViewport({ scale: 1 });
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      const target = 56 * dpr;
+      // 상단 내용이 보이도록 가로 기준 fit 후 세로 crop
+      const scale = target / base.width;
+      const viewport = page.getViewport({ scale });
+      const canvas = canvasRef.current;
+      if (!canvas || cancelled) return;
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(Math.min(viewport.height, target));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("no canvas");
+      // 전체 페이지 렌더 후 상단만 보이도록 canvas 높이로 clip
+      const fullCanvas = document.createElement("canvas");
+      fullCanvas.width = Math.ceil(viewport.width);
+      fullCanvas.height = Math.ceil(viewport.height);
+      const fullCtx = fullCanvas.getContext("2d");
+      if (!fullCtx) throw new Error("no canvas");
+      await page.render({
+        canvasContext: fullCtx,
+        viewport,
+        canvas: fullCanvas,
+      }).promise;
+      ctx.drawImage(
+        fullCanvas,
+        0,
+        0,
+        fullCanvas.width,
+        canvas.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      if (!cancelled) setStatus("ready");
+    })().catch(() => {
+      if (!cancelled) setStatus("error");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contentUrl]);
+
+  if (status === "error") {
+    return (
+      <div className="flex h-14 w-14 flex-col items-center justify-center bg-slate-100 px-1">
+        <span className="text-[10px] font-bold tracking-wide text-rose-600">PDF</span>
+        <span className="line-clamp-2 w-full text-center text-[8px] leading-tight text-slate-500">
+          {fileName.replace(/\.pdf$/i, "")}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-14 w-14 overflow-hidden bg-white">
+      {status === "loading" ? (
+        <div className="absolute inset-0 animate-pulse bg-slate-100" />
+      ) : null}
+      <canvas ref={canvasRef} className="h-14 w-14" aria-label={fileName} />
+    </div>
+  );
+}
+
+/** 진행현황 코멘트 박스 안 작은 첨부 썸네일 */
+function ProgressAttachmentThumb({
+  fundId,
+  att,
+  canEdit,
+  onRemove,
+}: {
+  fundId: string;
+  att: ProgressAttachment;
+  canEdit: boolean;
+  onRemove: () => void;
+}) {
+  const isImage = (att.mimeType || "").startsWith("image/");
+  const isPdf =
+    (att.mimeType || "").includes("pdf") || /\.pdf$/i.test(att.fileName);
+  const contentUrl = `/api/lab-portfolio/attachments/file?fundId=${encodeURIComponent(fundId)}&attachmentId=${encodeURIComponent(att.id)}`;
+  // 원본: Drive 링크가 있으면 그걸, 없으면 파일 API
+  const openUrl = att.url || contentUrl;
+
+  return (
+    <div className="group relative">
+      <a
+        href={openUrl}
+        target="_blank"
+        rel="noreferrer"
+        title={`${att.fileName} · 클릭하면 원본 보기`}
+        className="block overflow-hidden rounded border border-border bg-neutral-50 shadow-sm transition hover:border-accent/50 hover:shadow"
+      >
+        {isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={contentUrl}
+            alt={att.fileName}
+            className="h-14 w-14 object-cover"
+          />
+        ) : isPdf ? (
+          <PdfContentThumb contentUrl={contentUrl} fileName={att.fileName} />
+        ) : (
+          <div className="flex h-14 w-14 flex-col items-center justify-center bg-slate-100 px-1">
+            <span className="text-[10px] font-bold text-slate-600">FILE</span>
+          </div>
+        )}
+      </a>
+      {canEdit ? (
+        <button
+          type="button"
+          aria-label={`${att.fileName} 삭제`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-800 text-[10px] leading-none text-white opacity-0 shadow transition group-hover:opacity-100"
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** 사업장/회차별과 동일한 상세 패널 (툴팁·카드 공용) */
 export function LabRoundDetail({
   fund,
@@ -185,7 +456,7 @@ export function LabRoundDetail({
   compact?: boolean;
   onFundUpdated?: (fund: LabFund) => void;
 }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canViewFullOverview } = useAuth();
   const canEdit = isAdmin && !readOnly;
   const payments = [...fund.interestPayments].sort((a, b) => a.round - b.round);
   const repaid = hasRepaymentDate(fund);
@@ -194,11 +465,47 @@ export function LabRoundDetail({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [history, setHistory] = useState<LabProgressRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachments = fund.progressAttachments ?? [];
 
   useEffect(() => {
     setComment(fund.progressComment ?? "");
     setMessage(null);
   }, [fund.id, fund.progressComment]);
+
+  useEffect(() => {
+    if (!canViewFullOverview) {
+      setHistory([]);
+      setHistoryLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetch(
+      `/api/lab-progress?history=1&labName=${encodeURIComponent(fund.name)}`,
+      { cache: "no-store" }
+    )
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? "이력 조회 실패");
+        return data as LabProgressRow[];
+      })
+      .then((rows) => {
+        if (!cancelled) setHistory(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewFullOverview, fund.name, fund.actualProgressPct, fund.plannedProgressPct]);
 
   async function saveComment() {
     setSaving(true);
@@ -220,6 +527,62 @@ export function LabRoundDetail({
       setSaving(false);
     }
   }
+
+  async function uploadAttachment(file: File) {
+    setUploadingFile(true);
+    setMessage(null);
+    try {
+      const form = new FormData();
+      form.set("fundId", fund.id);
+      form.set("file", file);
+      const res = await fetch("/api/lab-portfolio/attachments", {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error ?? "첨부 실패");
+        return;
+      }
+      setMessage(
+        data.warning
+          ? `${file.name} 첨부됨 (${data.warning})`
+          : `${file.name} 첨부됨`
+      );
+      onFundUpdated?.(data.fund);
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function removeAttachment(att: ProgressAttachment) {
+    if (!confirm(`${att.fileName} 첨부를 삭제할까요?`)) return;
+    setMessage(null);
+    const res = await fetch("/api/lab-portfolio/attachments", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fundId: fund.id, attachmentId: att.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMessage(data.error ?? "삭제 실패");
+      return;
+    }
+    setMessage("첨부를 삭제했습니다.");
+    onFundUpdated?.(data.fund);
+  }
+
+  const chartRows = [...history]
+    .filter(
+      (r) =>
+        r.confirmedDate ||
+        r.plannedProgressPct != null ||
+        r.actualProgressPct != null
+    )
+    .sort((a, b) =>
+      (a.confirmedDate ?? "9999").localeCompare(b.confirmedDate ?? "9999")
+    );
 
   const v = (x: string | null | undefined) => x?.trim() || "—";
   const conditions: { label: string; value: string | null | undefined }[] = [
@@ -385,6 +748,34 @@ export function LabRoundDetail({
           )}
         </div>
 
+        {canViewFullOverview ? (
+          <section className="rounded-lg border border-border bg-white p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-slate-800">월별 공정율</h4>
+                <p className="mt-0.5 text-[11px] text-muted">
+                  확인일 기준 시계열 · 최신 값은 상단 공정율 배지에 표시
+                </p>
+              </div>
+              <div className="flex gap-3 text-[11px] text-muted">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-im-beige" /> 계획
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-im-mint" /> 실적
+                </span>
+              </div>
+            </div>
+            {historyLoading ? (
+              <p className="text-xs text-muted">불러오는 중…</p>
+            ) : chartRows.length === 0 ? (
+              <p className="text-xs text-muted">등록된 공정율 이력이 없습니다.</p>
+            ) : (
+              <ProgressHistoryBarChart rows={chartRows} />
+            )}
+          </section>
+        ) : null}
+
         <section className="rounded-lg border border-border bg-neutral-50/70 p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-slate-800">진행현황 코멘트</h4>
@@ -395,28 +786,75 @@ export function LabRoundDetail({
             )}
           </div>
 
-          {canEdit ? (
-            <div className="space-y-2">
+          <div
+            className={cn(
+              "rounded-md border border-border bg-white",
+              canEdit ? "" : "px-3 py-2"
+            )}
+          >
+            {canEdit ? (
               <textarea
-                className="min-h-[6rem] w-full rounded-md border border-border bg-white px-3 py-2 text-sm"
+                className="min-h-[6rem] w-full resize-y rounded-t-md border-0 bg-transparent px-3 py-2 text-sm outline-none"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="공사 진행 상황, 이슈, 다음 액션 등을 입력하세요."
               />
-              <div className="flex items-center gap-2">
-                <Button type="button" onClick={saveComment} disabled={saving}>
-                  {saving ? "저장 중…" : "코멘트 저장"}
-                </Button>
-                {message ? <p className="text-xs text-muted">{message}</p> : null}
+            ) : (
+              <p className="min-h-[3rem] whitespace-pre-wrap text-sm text-foreground">
+                {fund.progressComment?.trim()
+                  ? fund.progressComment
+                  : "등록된 진행현황 코멘트가 없습니다."}
+              </p>
+            )}
+
+            {attachments.length > 0 ? (
+              <div
+                className={cn(
+                  "flex flex-wrap gap-2 px-2 pb-2",
+                  canEdit && "border-t border-border/60 pt-2"
+                )}
+              >
+                {attachments.map((att) => (
+                  <ProgressAttachmentThumb
+                    key={att.id}
+                    fundId={fund.id}
+                    att={att}
+                    canEdit={canEdit}
+                    onRemove={() => void removeAttachment(att)}
+                  />
+                ))}
               </div>
+            ) : null}
+          </div>
+
+          {canEdit ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={saveComment} disabled={saving}>
+                {saving ? "저장 중…" : "코멘트 저장"}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadAttachment(f);
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={uploadingFile}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingFile ? "첨부 중…" : "pdf·사진첨부"}
+              </Button>
+              {message ? <p className="text-xs text-muted">{message}</p> : null}
             </div>
-          ) : (
-            <p className="whitespace-pre-wrap text-sm text-foreground">
-              {fund.progressComment?.trim()
-                ? fund.progressComment
-                : "등록된 진행현황 코멘트가 없습니다."}
-            </p>
-          )}
+          ) : message ? (
+            <p className="mt-2 text-xs text-muted">{message}</p>
+          ) : null}
         </section>
       </div>
       {mapOpen && siteAddress ? (

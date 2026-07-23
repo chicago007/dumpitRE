@@ -1,6 +1,6 @@
 # Dumpit RE — 개발 노트
 
-> **최종 갱신:** 2026-07-23 (v1.03)  
+> **최종 갱신:** 2026-07-23 (v1.04)  
 > **대상:** 부동산랩 사업장관리 웹앱 (Next.js · Supabase · Gemini)
 
 ---
@@ -10,7 +10,7 @@
 | 영역 | 경로 | 역할 | 접근 |
 |------|------|------|------|
 | 전체 현황 | `/management` | 랩 목록 · 헤더 요약(진행/잔액/수수료) | 로그인 |
-| 사업장별(회차) | `/management/sites` | 헤더 드롭다운 · 랩 상세 · 조건 · 회차 이자 | 로그인 |
+| 사업장별(회차) | `/management/sites` | 헤더 드롭다운 · 랩 상세 · **월별 공정율**(admin·wrap) · 조건 · 회차 · 진행 코멘트·첨부 | 로그인 |
 | 분배금/만기일 | `/management/interest` | 분배·만기·중도상환 일정 · 달력 · 스케줄표 | 로그인 |
 | 만기 캘린더 | `/management/interest/maturity` | 중도상환/대출만기/펀드만기 차트 | 로그인 |
 | 설정·상환 추이 | `/management/setup-repayment` | 설정·상환 차트 | **관리자·wrap** |
@@ -20,21 +20,22 @@
 | 사업장관리 | `/admin/portfolio` | `lab_funds` CRUD | 관리자 |
 | 공정율 현황 | `/admin/progress` | 랩별 최신 공정율 · active 미등록분 placeholder | 관리자 |
 | 검토 대기함 | `/admin/review` | 업로드 후 수동 처리 큐 | 관리자 |
+| Drive 연결 | `/admin/drive` | Google OAuth(내 드라이브) 연결 | 관리자 |
 | 로그인 기록 | `/admin/login-logs` | guest 접속 IP·시각 | 관리자 |
 | 업로드 | `/upload` | 관리현황 · 제안서 · 공정율 | 관리자 |
 
 ---
 
-## 2. 인증 (v1.03)
+## 2. 인증 (v1.04)
 
 - **로그인 필수**: `middleware.ts` — `/login`, `/api/auth/*` 제외 전 경로
 - **계정** (비밀번호는 코드에 없음, `.env.local` / Vercel env)
   - `admin` — 관리자 (관리자 메뉴 + 전체 현황 전체)
-  - `wrap` — 일반 + 전체 현황 서브메뉴 전체 (설정·상환/수수료/업체별/지역별)
-  - `guest` — 일반 (조회 위주, 제한 메뉴 제외)
+  - `wrap` — 일반 + 전체 현황 서브메뉴 전체 (설정·상환/수수료/업체별/지역별) + **월별 공정율**
+  - `guest` — 일반 (조회 위주, 월별 공정율·제한 메뉴 제외)
 - **환경 변수**: `DUMPIT_ADMIN_PASSWORD`, `DUMPIT_GUEST_PASSWORD`, `DUMPIT_WRAP_PASSWORD`
 - **guest 로그인 로그**: Supabase `guest_login_logs` 또는 로컬 `.data/guest-login-logs.json`
-- **폰트**: Pretendard CDN (`cdn.jsdelivr.net/npm/pretendard`)
+- **폰트**: Pretendard npm (`pretendard` → `globals.css` import)
 
 ---
 
@@ -58,9 +59,13 @@
 - **공정확인서**(1~2장): 계획(%)/실적(%)/대비·달성률 + 표 아래 확인일  
   - 텍스트 PDF: `gisung-progress` 표 패턴  
   - 스캔 PDF: Gemini (`extractProcessConfirmFromPdf`) — `GEMINI_API_KEY` 필요
-- 이력: `GET /api/lab-progress?history=1&labName=…`
+- 이력: `GET /api/lab-progress?history=1&labName=…` — **사업장별 상세「월별 공정율」**에 표시
 - 미제출: `GET /api/lab-progress?missing=1` (active 랩 × 해당 월)
 - 시드/재처리: `scripts/seed-progress-placeholders.mts`, `scripts/reprocess-process-confirms.mts`
+- **진행현황 첨부**: `lab_funds.progress_attachments` (PDF·이미지 메타 JSONB)
+  - 업로드: OAuth 연결 시 **내 드라이브** 우선, 실패 시 로컬 `uploads/progress/{fundId}/`
+  - UI: 코멘트 박스 내 썸네일 · 클릭 시 원본 (`pdfjs-dist`로 PDF 1페이지)
+  - 관리자 Drive 연결: `/admin/drive` (`GOOGLE_OAUTH_*`, 토큰 `.data/google-drive-oauth.json`)
 
 ### 3.2.1 검토 대기함 (`review_queue`)
 
@@ -119,7 +124,7 @@
 - 자금집행 Excel 파서 미구현 (문서 유형 옵션 제거됨)
 - Q&A는 레거시 site 모델 비중 — `lab_funds`/`lab_progress` 연동 강화 여지
 - 데모 cookie auth — 프로덕션 전 Supabase Auth + RLS 권장
-- 공정율 이력 전용 UI(랩 클릭 시 월별 추이)는 API만 있고 화면은 최신값 중심
+- 공정율 이력 UI: 사업장별 상세「월별 공정율」에 확인일별 표 표시 (관리자 공정율 현황은 최신 1건)
 
 ---
 

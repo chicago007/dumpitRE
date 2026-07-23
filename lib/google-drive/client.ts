@@ -1,5 +1,9 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
+import {
+  getAuthorizedOAuthClient,
+  isGoogleOAuthConnected,
+} from "@/lib/google-drive/oauth";
 
 export interface DriveUploadResult {
   fileId: string;
@@ -10,7 +14,6 @@ export interface DriveUploadResult {
 function getPrivateKey(): string {
   let raw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ?? "";
   raw = raw.trim();
-  // JSON/dotenv 붙여넣기 잔여물: 따옴표·쉼표
   if (
     (raw.startsWith('"') && raw.endsWith('"')) ||
     (raw.startsWith("'") && raw.endsWith("'"))
@@ -31,11 +34,16 @@ function getPrivateKey(): string {
   return raw;
 }
 
-function getAuth() {
+function hasServiceAccount(): boolean {
+  return Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() && getPrivateKey()
+  );
+}
+
+function getServiceAccountAuth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const key = getPrivateKey();
   if (!email || !key) return null;
-
   return new google.auth.JWT({
     email,
     key,
@@ -43,30 +51,35 @@ function getAuth() {
   });
 }
 
-function getDrive() {
-  const auth = getAuth();
+async function getDrive() {
+  // 내 드라이브 업로드: OAuth(사용자) 우선
+  const oauth = await getAuthorizedOAuthClient();
+  const auth = oauth ?? getServiceAccountAuth();
   if (!auth) return null;
-  return google.drive({ version: "v3", auth });
+  // googleapis 중복 타입 선언 회피
+  return google.drive({ version: "v3", auth: auth as never });
 }
 
-export function isGoogleDriveConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-      process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY &&
-      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
-  );
-}
-
-const folderCache = new Map<string, string>();
-
-function rootFolderId(): string | null {
+export function rootFolderId(): string | null {
   const id = (process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ?? "").trim().replace(/[.\s]+$/, "");
   return id || null;
 }
 
+export function isGoogleDriveConfigured(): boolean {
+  return Boolean(rootFolderId() && (isGoogleOAuthConnected() || hasServiceAccount()));
+}
+
+export function getGoogleDriveAuthMode(): "oauth" | "service_account" | "none" {
+  if (isGoogleOAuthConnected()) return "oauth";
+  if (hasServiceAccount() && rootFolderId()) return "service_account";
+  return "none";
+}
+
+const folderCache = new Map<string, string>();
+
 export async function ensureSiteFolder(siteName: string): Promise<string | null> {
   const rootId = rootFolderId();
-  const drive = getDrive();
+  const drive = await getDrive();
   if (!rootId || !drive) return null;
 
   const cacheKey = siteName.slice(0, 80);
@@ -78,14 +91,15 @@ export async function ensureSiteFolder(siteName: string): Promise<string | null>
   const existing = await drive.files.list({
     q: query,
     fields: "files(id, name)",
+    spaces: "drive",
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
-    corpora: "allDrives",
   });
 
-  if (existing.data.files?.[0]?.id) {
-    folderCache.set(cacheKey, existing.data.files[0].id!);
-    return existing.data.files[0].id!;
+  const existingId = existing.data.files?.[0]?.id;
+  if (existingId) {
+    folderCache.set(cacheKey, existingId);
+    return existingId;
   }
 
   const created = await drive.files.create({
@@ -118,11 +132,11 @@ export async function uploadToGoogleDrive(
   buffer: Buffer,
   options?: { siteName?: string; docType?: string }
 ): Promise<DriveUploadResult | null> {
-  const drive = getDrive();
+  const drive = await getDrive();
   const rootId = rootFolderId();
   if (!drive || !rootId) return null;
 
-  // 루트 폴더 접근 가능 여부 선확인 (공유 누락/잘못된 ID를 바로 안내)
+  const mode = getGoogleDriveAuthMode();
   try {
     await drive.files.get({
       fileId: rootId,
@@ -132,7 +146,9 @@ export async function uploadToGoogleDrive(
   } catch (err) {
     const detail = err instanceof Error ? err.message : "unknown";
     throw new Error(
-      `루트 폴더(${rootId})에 접근할 수 없습니다. 서비스 계정에 편집자 공유·폴더 ID를 확인해 주세요. (${detail})`
+      mode === "oauth"
+        ? `루트 폴더(${rootId})에 접근할 수 없습니다. 로그인한 Google 계정 소유/편집 권한과 폴더 ID를 확인해 주세요. (${detail})`
+        : `루트 폴더(${rootId})에 접근할 수 없습니다. 서비스 계정 공유·폴더 ID를 확인해 주세요. (${detail})`
     );
   }
 
@@ -147,9 +163,9 @@ export async function uploadToGoogleDrive(
     const subExisting = await drive.files.list({
       q: subQuery,
       fields: "files(id)",
+      spaces: "drive",
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
-      corpora: "allDrives",
     });
     if (subExisting.data.files?.[0]?.id) {
       parentId = subExisting.data.files[0].id!;
@@ -171,7 +187,9 @@ export async function uploadToGoogleDrive(
     ? "application/pdf"
     : fileName.endsWith(".xlsx")
       ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      : "application/octet-stream";
+      : fileName.match(/\.(png|jpe?g|webp|gif)$/i)
+        ? `image/${fileName.toLowerCase().endsWith(".jpg") ? "jpeg" : fileName.split(".").pop()!.toLowerCase()}`
+        : "application/octet-stream";
 
   const uploaded = await drive.files.create({
     requestBody: { name: fileName, parents: [parentId] },
@@ -185,4 +203,28 @@ export async function uploadToGoogleDrive(
     uploaded.data.webViewLink ?? `https://drive.google.com/file/d/${fileId}/view`;
 
   return { fileId, webViewLink, folderId: parentId };
+}
+
+export async function downloadFromGoogleDrive(
+  fileId: string
+): Promise<{ buffer: Buffer; mimeType: string | null } | null> {
+  const drive = await getDrive();
+  if (!drive || !fileId) return null;
+
+  const meta = await drive.files.get({
+    fileId,
+    fields: "id, mimeType",
+    supportsAllDrives: true,
+  });
+
+  const res = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" }
+  );
+
+  const data = res.data as ArrayBuffer;
+  return {
+    buffer: Buffer.from(data),
+    mimeType: meta.data.mimeType ?? null,
+  };
 }

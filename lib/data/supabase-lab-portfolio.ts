@@ -5,6 +5,7 @@ import type {
   LabFundStatus,
   LabInterestPayment,
   LabPortfolioSnapshot,
+  ProgressAttachment,
 } from "@/lib/types";
 
 type LabFundRow = {
@@ -39,6 +40,7 @@ type LabFundRow = {
   vs_plan: string | null;
   note: string | null;
   progress_comment: string | null;
+  progress_attachments: ProgressAttachment[] | null;
   interest_payments: LabInterestPayment[] | null;
   status: LabFundStatus;
 };
@@ -94,6 +96,7 @@ export function fundToRow(fund: LabFund): LabFundRow {
     vs_plan: fund.vsPlan,
     note: fund.note,
     progress_comment: fund.progressComment,
+    progress_attachments: fund.progressAttachments ?? [],
     interest_payments: fund.interestPayments ?? [],
     status: fund.status,
   };
@@ -134,6 +137,9 @@ export function rowToFund(row: LabFundRow): LabFund {
     vsPlan: row.vs_plan,
     note: row.note,
     progressComment: row.progress_comment,
+    progressAttachments: Array.isArray(row.progress_attachments)
+      ? row.progress_attachments
+      : [],
     interestPayments: Array.isArray(row.interest_payments)
       ? row.interest_payments
       : [],

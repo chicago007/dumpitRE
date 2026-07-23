@@ -9,6 +9,9 @@
    - `supabase/migrations/003_lab_portfolio.sql`
    - `supabase/migrations/004_lab_progress.sql`
    - `supabase/migrations/005_product_review_progress_history.sql`
+   - `supabase/migrations/006_early_repayment_date.sql`
+   - `supabase/migrations/007_guest_login_logs.sql`
+   - `supabase/migrations/008_progress_attachments.sql`
 3. `.env.local` 설정:
 
 ```env
@@ -21,10 +24,34 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 ## 2. Google Drive
 
-1. Google Cloud Console → Drive API 활성화
-2. 서비스 계정 생성 + JSON 키 다운로드
-3. Drive에서 `DumpitRE` 폴더 생성 → 서비스 계정 이메일에 **편집자** 공유
-4. `.env.local`:
+### 권장: OAuth (개인 내 드라이브)
+
+서비스 계정은 **내 드라이브에 파일 생성 불가**(용량 0). 개인 Gmail은 OAuth를 사용합니다.
+
+1. Google Cloud Console → **Drive API** 사용 설정
+2. **OAuth 클라이언트 ID**(웹 애플리케이션) 생성
+3. 승인된 리디렉션 URI:
+   ```
+   http://localhost:3000/api/google-drive/oauth/callback
+   ```
+4. OAuth 동의 화면이 **테스트**면 테스트 사용자에 본인 Gmail 추가
+5. `.env.local`:
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=....apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/google-drive/oauth/callback
+GOOGLE_DRIVE_ROOT_FOLDER_ID=1abc...folderId
+```
+
+6. 관리자 → **Drive 연결** (`/admin/drive`) → **Google 계정 연결**
+7. 토큰은 `.data/google-drive-oauth.json`에 저장 (gitignore). Vercel이면 `GOOGLE_OAUTH_REFRESH_TOKEN`도 가능
+
+업로드 시 `{사업장명}/02_공정율/` 하위에 저장됩니다.
+
+### 선택: 서비스 계정 (공유 드라이브만)
+
+Google Workspace **공유 드라이브** + 서비스 계정 멤버(콘텐츠 관리자)일 때만 동작합니다.
 
 ```env
 GOOGLE_SERVICE_ACCOUNT_EMAIL=xxx@xxx.iam.gserviceaccount.com
@@ -32,7 +59,7 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END P
 GOOGLE_DRIVE_ROOT_FOLDER_ID=1abc...folderId
 ```
 
-업로드 시 `{사업장명}/02_공정율/` 하위에 저장됩니다.
+OAuth가 연결돼 있으면 OAuth가 우선입니다.
 
 ## 3. RAG Q&A (Google Gemini)
 

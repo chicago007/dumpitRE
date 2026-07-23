@@ -6,6 +6,22 @@
 
 ## 2026-07-23
 
+### v1.04
+
+- 버전 `v1.04` (`lib/version.ts`)
+- **진행현황 코멘트 첨부**
+  - PDF·이미지 첨부 (`lab_funds.progress_attachments`, migration `008`)
+  - 코멘트 박스 안 썸네일(사진은 미리보기, PDF는 1페이지 렌더) · 클릭 시 원본
+  - API: `/api/lab-portfolio/attachments`, 로컬 파일 서빙
+- **월별 공정율**
+  - 사업장별 상세 막대 차트 — **admin·wrap만** 표시 (`guest` 숨김)
+- **Google Drive**
+  - **OAuth(내 드라이브)** 우선 — `/admin/drive`에서 Google 계정 연결
+  - 서비스 계정은 공유 드라이브용 폴백으로 유지
+  - env: `GOOGLE_OAUTH_CLIENT_ID` / `SECRET` / `REDIRECT_URI`
+- **폰트**
+  - Pretendard npm 패키지 번들 (`globals.css` import) — CDN `<head>` 의존 제거
+
 ### v1.03
 
 - 버전 `v1.03` (`lib/version.ts`)

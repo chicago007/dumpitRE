@@ -335,7 +335,7 @@ export async function POST(req: NextRequest) {
     driveUpload = {
       ok: false,
       message:
-        "Google Drive 업로드 안 됨: 환경변수(GOOGLE_SERVICE_ACCOUNT_EMAIL / PRIVATE_KEY / DRIVE_ROOT_FOLDER_ID)가 없습니다.",
+        "Google Drive 업로드 안 됨: OAuth 미연결 또는 환경변수(GOOGLE_OAUTH_CLIENT_* / GOOGLE_DRIVE_ROOT_FOLDER_ID)가 없습니다. /admin/drive 에서 연결하세요.",
     };
     warnings.push(driveUpload.message);
   } else {
@@ -356,7 +356,7 @@ export async function POST(req: NextRequest) {
         driveUpload = {
           ok: false,
           message:
-            "Google Drive 업로드 안 됨: Drive API가 파일을 만들지 못했습니다. 루트 폴더 공유(서비스 계정 편집자)를 확인해 주세요.",
+            "Google Drive 업로드 안 됨: Drive API가 파일을 만들지 못했습니다. /admin/drive OAuth 연결과 루트 폴더 ID를 확인해 주세요.",
         };
         warnings.push(driveUpload.message);
       }
