@@ -350,7 +350,8 @@ export async function addLabFundProgressAttachment(
   attachment: import("@/lib/types").ProgressAttachment
 ): Promise<LabFund | null> {
   const portfolio = await getLabPortfolio();
-  const fund = portfolio?.funds.find((f) => f.id === fundId);
+  if (!portfolio) return null;
+  const fund = portfolio.funds.find((f) => f.id === fundId);
   if (!fund) return null;
   const nextFund: LabFund = normalizeFund({
     ...fund,
@@ -379,7 +380,8 @@ export async function removeLabFundProgressAttachment(
   attachmentId: string
 ): Promise<LabFund | null> {
   const portfolio = await getLabPortfolio();
-  const fund = portfolio?.funds.find((f) => f.id === fundId);
+  if (!portfolio) return null;
+  const fund = portfolio.funds.find((f) => f.id === fundId);
   if (!fund) return null;
   const nextFund: LabFund = normalizeFund({
     ...fund,
