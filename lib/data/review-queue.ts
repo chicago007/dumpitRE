@@ -154,6 +154,28 @@ export async function enqueueProgressReview(
   labProgress: LabProgressApplyResult,
   extra?: { extractionFailed?: boolean }
 ): Promise<void> {
+  // 추출 실패는 created/updated여도 대기함에 남겨 수동 확인
+  if (extra?.extractionFailed) {
+    await enqueueReviewItem({
+      kind: "progress_extract_failed",
+      documentId,
+      fileName,
+      message:
+        labProgress.message ||
+        "공정율을 추출하지 못했습니다. 업로드 화면에서 랩을 확인하고 수정하세요.",
+      payload: {
+        row: labProgress.row,
+        existing: labProgress.existing,
+        matchCandidates: labProgress.matchCandidates,
+        needsConfirmation: true,
+        suggestedLabName: labProgress.suggestedLabName,
+        action: labProgress.action,
+        extractionFailed: true,
+      },
+    });
+    return;
+  }
+
   if (labProgress.action === "created" || labProgress.action === "updated") {
     await resolveReviewByDocumentId(documentId);
     return;
@@ -161,7 +183,6 @@ export async function enqueueProgressReview(
 
   let kind: ReviewQueueKind = "progress_match";
   if (labProgress.action === "stale") kind = "progress_stale";
-  else if (extra?.extractionFailed) kind = "progress_extract_failed";
 
   await enqueueReviewItem({
     kind,

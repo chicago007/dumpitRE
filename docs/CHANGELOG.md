@@ -6,6 +6,18 @@
 
 ## 2026-07-23
 
+### v1.03
+
+- 버전 `v1.03` (`lib/version.ts`)
+- **공정확인서 업로드**
+  - 표(계획/실적·대비·달성률) + 표 아래 확인일 추출
+  - 스캔 PDF는 Gemini Vision으로 인식 (`process-confirm-extract`)
+  - 파일명에 공정/기성이 있으면 제안서 오인 방지
+  - 공정율 추출 실패 시 검토 대기함에 `progress_extract_failed` 적재
+- **검토 대기함**
+  - 「처리하기」가 빈 업로드 화면만 열던 문제 수정 → 매칭/덮어쓰기 패널에 대기 데이터 복원
+- **재처리 스크립트**: `npx tsx scripts/reprocess-process-confirms.mts`
+
 ### v1.02
 
 - 버전 `v1.02` (`lib/version.ts`)

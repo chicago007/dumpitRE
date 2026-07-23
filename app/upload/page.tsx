@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdmin } from "@/components/auth/require-admin";
@@ -27,6 +27,16 @@ const docTypes: { id: DocumentType; label: string }[] = [
 
 const REG_STORAGE_KEY = "dumpitre_pending_proposal_regs_v3";
 const PROGRESS_PENDING_KEY = "dumpitre_pending_progress_match_v1";
+const STALE_PENDING_KEY = "dumpitre_pending_progress_stale_v1";
+
+function isProgressExtractionFailed(lp: LabProgressApplyResult | undefined): boolean {
+  if (!lp?.row) return false;
+  return (
+    lp.row.actualProgressPct == null &&
+    lp.row.plannedProgressPct == null &&
+    !lp.row.specialNotes?.includes("필증")
+  );
+}
 
 const EMPTY_PARSED: ParsedProposal = {
   siteName: null,
@@ -158,7 +168,16 @@ async function fetchPendingRegistration(
 }
 
 export default function UploadPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-muted">불러오는 중…</p>}>
+      <UploadPageInner />
+    </Suspense>
+  );
+}
+
+function UploadPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [docType, setDocType] = useState<DocumentType>("proposal");
   const [uploading, setUploading] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
@@ -221,6 +240,18 @@ export default function UploadPage() {
     } catch {
       /* ignore */
     }
+    try {
+      const staleRaw = sessionStorage.getItem(STALE_PENDING_KEY);
+      if (staleRaw) {
+        const saved = JSON.parse(staleRaw) as LabProgressApplyResult;
+        if (saved?.action === "stale" && saved.row) {
+          setStalePrompt(saved);
+          sessionStorage.removeItem(STALE_PENDING_KEY);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     fetch("/api/lab-portfolio", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
@@ -249,6 +280,17 @@ export default function UploadPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("focus") !== "progress") return;
+    setDocType("progress_report");
+    const t = window.setTimeout(() => {
+      document
+        .getElementById("progress-match")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [searchParams, progressPending.length, stalePrompt]);
 
   async function enrichRegistrations(regs: ProposalRegistrationPrompt[]) {
     if (regs.length === 0) return;
@@ -330,14 +372,25 @@ export default function UploadPage() {
         } else if (data.labProgress?.action === "stale") {
           setStalePrompt(data.labProgress);
           setLastFeedback(data.labProgress.message);
-        } else if (data.labProgress?.action === "unmatched") {
-          unmatchedProgress.push(data.labProgress);
+        } else if (
+          data.labProgress?.action === "unmatched" ||
+          isProgressExtractionFailed(data.labProgress)
+        ) {
+          unmatchedProgress.push({
+            ...data.labProgress!,
+            action: "unmatched",
+            needsConfirmation: true,
+            message: isProgressExtractionFailed(data.labProgress)
+              ? data.labProgress?.message ||
+                "공정율을 추출하지 못했습니다. 랩을 선택한 뒤 공정율 현황에서 수치를 입력하세요."
+              : data.labProgress!.message,
+          });
         } else if (
           data.labProgress?.action === "created" ||
           data.labProgress?.action === "updated"
         ) {
           progressOkCount += 1;
-        } else if (looksProposal) {
+        } else if (looksProposal && docType !== "progress_report") {
           setLastFeedback(
             `${file.name}: 제안서로 인식했지만 선택 화면을 열지 못했습니다. 문서 유형을 「제안서」로 선택 후 다시 업로드해 주세요.`
           );
@@ -355,7 +408,8 @@ export default function UploadPage() {
           docType === "progress_report" &&
           !data.registration &&
           data.labProgress?.action !== "unmatched" &&
-          data.labProgress?.action !== "stale"
+          data.labProgress?.action !== "stale" &&
+          !isProgressExtractionFailed(data.labProgress)
         ) {
           router.push(data.redirectTo);
           return;

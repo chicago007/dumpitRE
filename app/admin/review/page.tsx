@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdmin } from "@/components/auth/require-admin";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { ReviewQueueItem } from "@/lib/types";
+import type { LabProgressApplyResult, ReviewQueueItem } from "@/lib/types";
+
+const PROGRESS_PENDING_KEY = "dumpitre_pending_progress_match_v1";
+const STALE_PENDING_KEY = "dumpitre_pending_progress_stale_v1";
 
 const kindLabel: Record<ReviewQueueItem["kind"], string> = {
   progress_match: "공정 매칭",
@@ -21,7 +25,28 @@ function kindVariant(kind: ReviewQueueItem["kind"]) {
   return "default" as const;
 }
 
+function toProgressResult(item: ReviewQueueItem): LabProgressApplyResult | null {
+  const payload = item.payload ?? {};
+  const row = payload.row as LabProgressApplyResult["row"];
+  if (!row) return null;
+  return {
+    action:
+      (payload.action as LabProgressApplyResult["action"]) ??
+      (item.kind === "progress_stale" ? "stale" : "unmatched"),
+    message: item.message,
+    row,
+    existing: (payload.existing as LabProgressApplyResult["existing"]) ?? null,
+    matchCandidates:
+      (payload.matchCandidates as LabProgressApplyResult["matchCandidates"]) ??
+      undefined,
+    needsConfirmation: true,
+    suggestedLabName:
+      (payload.suggestedLabName as string | null | undefined) ?? null,
+  };
+}
+
 export default function AdminReviewPage() {
+  const router = useRouter();
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,13 +86,37 @@ export default function AdminReviewPage() {
     setMessage("대기 항목을 보관했습니다.");
   }
 
-  function actionHref(item: ReviewQueueItem): string {
+  function handleProcess(item: ReviewQueueItem) {
     if (item.kind === "proposal_register") {
-      return item.documentId
-        ? `/upload?documentId=${encodeURIComponent(item.documentId)}`
-        : "/upload";
+      const q = item.documentId
+        ? `?documentId=${encodeURIComponent(item.documentId)}&reviewId=${encodeURIComponent(item.id)}`
+        : `?reviewId=${encodeURIComponent(item.id)}`;
+      router.push(`/upload${q}`);
+      return;
     }
-    return "/upload";
+
+    const result = toProgressResult(item);
+    if (!result) {
+      setMessage("대기 항목에 공정 데이터가 없어 업로드 화면으로만 이동합니다.");
+      router.push("/upload?focus=progress");
+      return;
+    }
+
+    try {
+      if (item.kind === "progress_stale") {
+        sessionStorage.setItem(STALE_PENDING_KEY, JSON.stringify(result));
+        sessionStorage.removeItem(PROGRESS_PENDING_KEY);
+      } else {
+        sessionStorage.setItem(PROGRESS_PENDING_KEY, JSON.stringify([result]));
+        sessionStorage.removeItem(STALE_PENDING_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    router.push(
+      `/upload?reviewId=${encodeURIComponent(item.id)}&focus=progress`
+    );
   }
 
   return (
@@ -85,8 +134,8 @@ export default function AdminReviewPage() {
       >
         <div className="mx-auto max-w-4xl space-y-4">
           <p className="text-xs text-muted">
-            업로드 후 수동 확인·등록이 필요한 항목입니다. 처리 후 자동으로 목록에서
-            사라집니다.
+            업로드 후 수동 확인·등록이 필요한 항목입니다. 「처리하기」로 업로드 화면의
+            매칭·덮어쓰기 UI를 엽니다.
           </p>
 
           {message ? <p className="text-xs text-accent">{message}</p> : null}
@@ -119,11 +168,13 @@ export default function AdminReviewPage() {
                       <p className="mt-1 text-xs text-muted">{item.message}</p>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <Link href={actionHref(item)}>
-                        <Button type="button" className="h-8 text-xs">
-                          처리하기
-                        </Button>
-                      </Link>
+                      <Button
+                        type="button"
+                        className="h-8 text-xs"
+                        onClick={() => handleProcess(item)}
+                      >
+                        처리하기
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"

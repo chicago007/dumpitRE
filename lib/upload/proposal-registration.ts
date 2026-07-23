@@ -12,6 +12,13 @@ export function shouldTreatAsProposal(
 ): boolean {
   if (!isPdf) return false;
   if (typeParam === "progress_report") return false;
+
+  // 공정/기성/필증은 제안서 휴리스틱보다 우선
+  const nfc = fileName.normalize("NFC");
+  if (/필증|착공신고|건축허가|기성|공정확인|공정율|공정\s*확인/.test(nfc) || /기성|공정/.test(fileName)) {
+    return false;
+  }
+
   if (typeParam === "proposal") return true;
 
   const lower = fileName.toLowerCase();

@@ -1,6 +1,6 @@
 # Dumpit RE — 개발 노트
 
-> **최종 갱신:** 2026-07-23 (v1.02)  
+> **최종 갱신:** 2026-07-23 (v1.03)  
 > **대상:** 부동산랩 사업장관리 웹앱 (Next.js · Supabase · Gemini)
 
 ---
@@ -25,7 +25,7 @@
 
 ---
 
-## 2. 인증 (v1.02)
+## 2. 인증 (v1.03)
 
 - **로그인 필수**: `middleware.ts` — `/login`, `/api/auth/*` 제외 전 경로
 - **계정** (비밀번호는 코드에 없음, `.env.local` / Vercel env)
@@ -54,9 +54,18 @@
 - **랩 × 확인일** 1행 (unique: `lab_name, confirmed_date`)
 - 공정율 현황 = 랩별 **최신 확인일** 1건
 - **active 랩**에 공정 행이 없으면 `{id}--placeholder` 행을 자동 생성 (`ensureActiveLabProgressPlaceholders`)
+- **기성실사보고서**: 합계 행(누계계획/실적/달성률) 파싱
+- **공정확인서**(1~2장): 계획(%)/실적(%)/대비·달성률 + 표 아래 확인일  
+  - 텍스트 PDF: `gisung-progress` 표 패턴  
+  - 스캔 PDF: Gemini (`extractProcessConfirmFromPdf`) — `GEMINI_API_KEY` 필요
 - 이력: `GET /api/lab-progress?history=1&labName=…`
 - 미제출: `GET /api/lab-progress?missing=1` (active 랩 × 해당 월)
-- 시드 스크립트: `npx tsx scripts/seed-progress-placeholders.mts`
+- 시드/재처리: `scripts/seed-progress-placeholders.mts`, `scripts/reprocess-process-confirms.mts`
+
+### 3.2.1 검토 대기함 (`review_queue`)
+
+- 공정 매칭 실패 · 구자료 덮어쓰기 · **공정율 추출 실패** · 제안서 등록
+- 「처리하기」→ `/upload?reviewId=…&focus=progress` 로 대기 payload 복원 후 매칭 UI 표시
 
 ### 3.3 `product_master` / `review_queue`
 
@@ -101,6 +110,7 @@
 4. 관리현황 엑셀 업로드 → 사업장관리 확인
 5. guest 로그인 → `/admin/login-logs`에서 기록 확인
 6. (선택) 공정율 placeholder 시드: `npx tsx scripts/seed-progress-placeholders.mts`
+7. (선택) 공정확인서 재처리: `npx tsx scripts/reprocess-process-confirms.mts` (uploads/ + Gemini)
 
 ---
 

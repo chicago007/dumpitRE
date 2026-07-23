@@ -236,22 +236,96 @@ export function extractCumulativeProgress(text: string): {
       /합\s*계\s+100(?:\.00)?%\s+([\d.]+)%\s+([\d.]+)%\s+([\d.]+)%\s+([\d.]+)%\s+([\d.]+)%\s+([\d.]+)%/
     );
 
-  if (!row) {
-    return { plannedProgressPct: null, actualProgressPct: null, achievementPct: null };
+  if (row) {
+    // 8값: … 누계계획[5] 누계실적[6] 달성률[7]
+    if (row.length >= 8) {
+      const planned = Number(row[5]);
+      const actual = Number(row[6]);
+      const achRaw = row[7];
+      const achievement =
+        achRaw === "#DIV/0!" || achRaw == null ? null : Number(achRaw);
+      return {
+        plannedProgressPct: Number.isFinite(planned) ? planned : null,
+        actualProgressPct: Number.isFinite(actual) ? actual : null,
+        achievementPct:
+          achievement != null && Number.isFinite(achievement) ? achievement : null,
+      };
+    }
+    // 6값: … 누계계획[5] 누계실적[6]
+    if (row.length >= 7) {
+      const planned = Number(row[5]);
+      const actual = Number(row[6]);
+      return {
+        plannedProgressPct: Number.isFinite(planned) ? planned : null,
+        actualProgressPct: Number.isFinite(actual) ? actual : null,
+        achievementPct: null,
+      };
+    }
   }
 
-  // 8값: … 누계계획[5] 누계실적[6] 달성률[7]
-  if (row.length >= 8) {
-    const planned = Number(row[5]);
-    const actual = Number(row[6]);
-    const achRaw = row[7];
-    const achievement =
-      achRaw === "#DIV/0!" || achRaw == null ? null : Number(achRaw);
+  // 공정확인서 간단 표: 계획(%) 실적(%) … / 대비·달성률
+  const confirmRow =
+    compact.match(
+      /공정\s*현황\s*계획\s*\(%\)\s*실적\s*\(%\)(?:\s*비고)?\s*([\d.]+)\s*%\s*([\d.]+)\s*%/
+    ) ??
+    compact.match(
+      /계획\s*\(%\)\s*실적\s*\(%\)(?:\s*비고)?\s*([\d.]+)\s*%\s*([\d.]+)\s*%/
+    ) ??
+    compact.match(
+      /누계\s*(?:\/)?\s*계획[^\d%]{0,30}([\d.]+)\s*%[^\d%]{0,40}(?:실행|실적)[^\d%]{0,20}([\d.]+)\s*%/
+    ) ??
+    compact.match(
+      /계획[^\d%]{0,10}([\d.]+)\s*%[^\d%]{0,20}(?:실행|실적)[^\d%]{0,10}([\d.]+)\s*%[^\d%]{0,20}(?:달성|대비)/
+    );
+  if (confirmRow) {
+    const planned = Number(confirmRow[1]);
+    const actual = Number(confirmRow[2]);
+    const achMatch =
+      compact.match(/대비\s*\(%\)\s*([\d.]+)\s*%/) ??
+      compact.match(/달성\s*률\s*[：:]?\s*([\d.]+)\s*%/) ??
+      compact.match(/달성\s*\(%\)\s*([\d.]+)\s*%/);
+    const achievement = achMatch ? Number(achMatch[1]) : null;
     return {
       plannedProgressPct: Number.isFinite(planned) ? planned : null,
       actualProgressPct: Number.isFinite(actual) ? actual : null,
       achievementPct:
         achievement != null && Number.isFinite(achievement) ? achievement : null,
+    };
+  }
+
+  // 공정확인서·간단 표 폴백
+  const mgmt = compact.match(/실시\s*\(B\)\s*([\d.]+)\s*%/);
+  const plan =
+    compact.match(/계획\([^)]*\)\s*\(A\)\s*([\d.]+)\s*%/) ??
+    compact.match(/계획\s*\(A\)\s*([\d.]+)\s*%/);
+  const planned = plan ? Number(plan[1]) : null;
+  const actual = mgmt ? Number(mgmt[1]) : null;
+  if (
+    (planned != null && Number.isFinite(planned)) ||
+    (actual != null && Number.isFinite(actual))
+  ) {
+    return {
+      plannedProgressPct: planned != null && Number.isFinite(planned) ? planned : null,
+      actualProgressPct: actual != null && Number.isFinite(actual) ? actual : null,
+      achievementPct: null,
+    };
+  }
+
+  // "누계실적 12.34%" / "실행공정율 12.34%" 단독 표기
+  const actualSolo =
+    compact.match(/누계\s*실적\s*([\d.]+)\s*%/) ??
+    compact.match(/실행\s*공정(?:율)?\s*([\d.]+)\s*%/) ??
+    compact.match(/실적\s*공정(?:율)?\s*([\d.]+)\s*%/);
+  const plannedSolo =
+    compact.match(/누계\s*계획\s*([\d.]+)\s*%/) ??
+    compact.match(/계획\s*공정(?:율)?\s*([\d.]+)\s*%/);
+  if (actualSolo || plannedSolo) {
+    const a = actualSolo ? Number(actualSolo[1]) : null;
+    const p = plannedSolo ? Number(plannedSolo[1]) : null;
+    return {
+      plannedProgressPct: p != null && Number.isFinite(p) ? p : null,
+      actualProgressPct: a != null && Number.isFinite(a) ? a : null,
+      achievementPct: null,
     };
   }
 

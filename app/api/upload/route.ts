@@ -19,6 +19,11 @@ import {
   extractGisungDateFromPdf,
   looksLikeBrokenCoverDate,
 } from "@/lib/analyzers/gisung-date-fallback";
+import {
+  extractProcessConfirmFromPdf,
+  injectProcessConfirmExtract,
+  looksLikeScannedProcessConfirm,
+} from "@/lib/analyzers/process-confirm-extract";
 import { ingestGisungProgress } from "@/lib/data/lab-progress";
 import { parseGisungReport } from "@/lib/analyzers/gisung-progress";
 import {
@@ -42,8 +47,16 @@ import {
 import type { DocumentRecord, DocumentType, LabProgressApplyResult, ProposalRegistrationPrompt } from "@/lib/types";
 
 function resolveEffectiveType(typeParam: DocumentType, fileName: string, isPdf: boolean): DocumentType {
-  if (isPdf && typeParam === "proposal") return "proposal";
   const inferred = inferDocumentType(fileName);
+  // UI에서 제안서를 골라도 파일명이 공정/기성이면 공정율로
+  if (
+    (isPdf || isImageFileName(fileName)) &&
+    typeParam === "proposal" &&
+    inferred === "progress_report"
+  ) {
+    return "progress_report";
+  }
+  if (isPdf && typeParam === "proposal") return "proposal";
   if (typeParam === "other") return inferred;
   // 파일명에 제안/공정/필증이 분명하면 UI에서 고른 유형보다 추론 우선
   if (
@@ -135,7 +148,7 @@ export async function POST(req: NextRequest) {
       } else if (inferredType === "progress_report") {
         const force = form.get("force") === "true";
         // 표지 일자 숫자가 null-byte로 깨진 PDF(예: 72호 인계동) → Gemini로 복구
-        const preview = parseGisungReport(pdfText, file.name);
+        let preview = parseGisungReport(pdfText, file.name);
         if (
           !preview.reportDate &&
           (looksLikeBrokenCoverDate(pdfText) || /기성|공정확인/.test(file.name))
@@ -146,10 +159,46 @@ export async function POST(req: NextRequest) {
             pdfText = `일자 ${y}년 ${Number(m)}월 ${Number(d)}일\n${pdfText}`;
             pdfTextForIndex = pdfText;
             applied.push(`확인일 복구 ${recovered.date}`);
+            preview = parseGisungReport(pdfText, file.name);
           } else if (recovered.warning) {
             warnings.push(recovered.warning);
           }
         }
+
+        // 공정확인서: 스캔본이거나 표 추출 실패 시 Gemini로 계획/실적/달성·확인일
+        const needsConfirmVision =
+          (/공정\s*확인|공정확인/.test(file.name.normalize("NFC")) ||
+            preview.documentKind === "process_confirm") &&
+          (looksLikeScannedProcessConfirm(file.name, pdfText) ||
+            (preview.plannedProgressPct == null &&
+              preview.actualProgressPct == null));
+        if (needsConfirmVision) {
+          const confirm = await extractProcessConfirmFromPdf(buffer, file.name);
+          if (
+            confirm.plannedProgressPct != null ||
+            confirm.actualProgressPct != null ||
+            confirm.reportDate
+          ) {
+            pdfText = injectProcessConfirmExtract(pdfText, confirm);
+            pdfTextForIndex = pdfText;
+            const bits = [
+              confirm.plannedProgressPct != null
+                ? `계획 ${confirm.plannedProgressPct}%`
+                : null,
+              confirm.actualProgressPct != null
+                ? `실적 ${confirm.actualProgressPct}%`
+                : null,
+              confirm.achievementPct != null
+                ? `달성 ${confirm.achievementPct}%`
+                : null,
+              confirm.reportDate ? `확인일 ${confirm.reportDate}` : null,
+            ].filter(Boolean);
+            applied.push(`공정확인서 인식: ${bits.join(", ")}`);
+          } else if (confirm.warning) {
+            warnings.push(confirm.warning);
+          }
+        }
+
         labProgress = await ingestGisungProgress({
           pdfText,
           fileName: file.name,
@@ -234,6 +283,13 @@ export async function POST(req: NextRequest) {
       if (labProgress.action === "stale" || labProgress.action === "unmatched") {
         analysisStatus = "needs_review";
         warnings.push(labProgress.message);
+      } else if (
+        labProgress.row?.actualProgressPct == null &&
+        labProgress.row?.plannedProgressPct == null &&
+        !labProgress.row?.specialNotes?.includes("필증")
+      ) {
+        analysisStatus = "needs_review";
+        warnings.push("공정율 추출 실패");
       } else {
         analysisStatus = "done";
       }
@@ -359,7 +415,12 @@ export async function POST(req: NextRequest) {
       docType === "management_status" && !registration
         ? "/admin/portfolio"
         : docType === "progress_report" &&
-            (labProgress?.action === "created" || labProgress?.action === "updated")
+            (labProgress?.action === "created" || labProgress?.action === "updated") &&
+            !(
+              labProgress.row?.actualProgressPct == null &&
+              labProgress.row?.plannedProgressPct == null &&
+              !labProgress.row?.specialNotes?.includes("필증")
+            )
           ? "/admin/progress"
           : undefined,
     message: registration
